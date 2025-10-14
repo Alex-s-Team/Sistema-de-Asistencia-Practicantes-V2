@@ -24,10 +24,10 @@ const Example = () => {
       {/* Contenedor principal */}
       <div className="bg-white/10 backdrop-blur-md p-10 rounded-3xl shadow-2xl border border-white/20 max-w-2xl w-full text-center text-white">
         <h1 className="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow-lg animate-fade-in">
-          Laravel + React + TailwindCSS 🤙
+          Laravel + React + TailwindCSS 💀
         </h1>
         <p className="text-lg text-gray-200 mb-8">
-          porfin se pudo xdxd 
+          ya fue
         </p>
 
         {/* Logos animados */}

@@ -37,7 +37,7 @@ const AnimatedLogos = () => {
         <div className="mt-8 flex justify-center space-x-4">
           <div className="h-1 w-16 rounded-full" style={{backgroundColor: '#ef4444', animation: 'pulse 2s infinite'}}></div>
           <div className="h-1 w-16 rounded-full" style={{backgroundColor: '#3b82f6', animation: 'pulse 2s infinite', animationDelay: '0.2s'}}></div>
-          <div className="h-1 w-16 rounded-full" style={{backgroundColor: '#06b6d4', animation: 'pulse 2s infinite', animationDelay: '0.4s'}}></div>
+          <div className="h-1 w-16 rounded-full" style={{backgroundColor: '#33e0ffff', animation: 'pulse 2s infinite', animationDelay: '0.4s'}}></div>
         </div>
       </div>
     </div>
