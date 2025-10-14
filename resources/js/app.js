@@ -2,10 +2,10 @@ import './bootstrap';
 import '../css/app.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import Example from './components/Example';
+import AnimatedLogos from './components/AnimatedLogos';
 
 ReactDOM.createRoot(document.getElementById('app')).render(
     <React.StrictMode>
-        <Example />
+        <AnimatedLogos />
     </React.StrictMode>
 );
