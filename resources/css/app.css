@@ -2,9 +2,3 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 👇 Aquí puedes poner estilos personalizados */
-@layer components {
-  .float-animation {
-    @apply animate-float;
-  }
-}

@@ -1,10 +1,29 @@
+// ============================================================================
+// resources/js/app.jsx - PUNTO DE ENTRADA PRINCIPAL
+// ============================================================================
 import "../css/app.css";
-import React from "react";
+import React from 'react';
 import ReactDOM from "react-dom/client";
-import Example from "./components/Example";
 
-ReactDOM.createRoot(document.getElementById("app")).render(
-  <React.StrictMode>
-    <Example />
-  </React.StrictMode>
-);
+//import { createRoot } from 'react-dom/client';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import PrivateRoute from './components/PrivateRoute';
+//import '../css/app.css';
+
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+const root = createRoot(document.getElementById('app'));
+root.render(<App />);

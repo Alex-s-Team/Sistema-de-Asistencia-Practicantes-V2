@@ -1,48 +1,68 @@
 <?php
 
+// ============================================================================
+// PASO 6: app/Models/User.php - MODELO ACTUALIZADO
+// ============================================================================
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
-        'name',
-        'email',
-        'password',
+        'nombres',
+        'apellido_paterno',
+        'apellido_materno',
+        'correo',
+        'contraseña',
+        'telefono',
+        'direccion',
+        'fecha_registro',
+        'rol_id',
+        'oficina_id',
+        'estado'
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
-        'password',
+        'contraseña',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
+    protected $casts = [
+        'fecha_registro' => 'datetime',
+        'estado' => 'string'
+    ];
+
+    // IMPORTANTE: Para autenticación con campo 'contraseña'
+    public function getAuthPassword()
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
+        return $this->contraseña;
+    }
+
+    // Accessor para obtener nombre completo
+    public function getNombreCompletoAttribute()
+    {
+        return "{$this->nombres} {$this->apellido_paterno} {$this->apellido_materno}";
+    }
+
+    // Relaciones
+    public function role()
+    {
+        return $this->belongsTo(Role::class, 'rol_id');
+    }
+
+    public function oficina()
+    {
+        return $this->belongsTo(Oficina::class, 'oficina_id');
+    }
+
+    public function practicante()
+    {
+        return $this->hasOne(Practicante::class, 'user_id');
     }
 }

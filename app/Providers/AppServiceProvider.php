@@ -1,5 +1,7 @@
 <?php
-
+// ============================================================================
+// app/Providers/AppServiceProvider.php - ÚNICO PROVIDER NECESARIO EN LARAVEL 11
+// ============================================================================
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
