@@ -17,6 +17,8 @@
         "vite": "^7.0.7"
     },
     "dependencies": {
+        "gsap": "^3.13.0",
+        "ogl": "^1.0.11",
         "react": "^19.2.0",
         "react-dom": "^19.2.0",
         "react-router-dom": "^7.9.4"

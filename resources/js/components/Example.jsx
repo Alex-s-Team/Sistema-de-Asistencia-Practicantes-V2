@@ -11,10 +11,11 @@ import React from "react";
 - TailwindCSS → Framework de estilos utilitarios.
 --------------------------------------------------------
 📂 Flujo general:
-1️⃣ Laravel sirve "welcome.blade.php"
-2️⃣ Ese HTML tiene <div id="app"></div>
-3️⃣ React se monta dentro de ese div.
-4️⃣ Vite compila Tailwind + React.
+1️⃣ Laravel sirve la app y maneja rutas.
+2️⃣ Vite compila React + Tailwind.
+3️⃣ React construye la UI con JSX.
+4️⃣ Tailwind estiliza con clases utilitarias.
+
 ========================================================
 */
 
