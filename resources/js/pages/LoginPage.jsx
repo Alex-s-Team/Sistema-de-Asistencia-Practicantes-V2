@@ -1,7 +1,8 @@
 // resources/js/pages/LoginPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authService } from '../services/auth.js';
+import { authService } from '../services/auth';
+
 import GalaxyAnimation from '../components/GalaxyAnimation.jsx'; // Ajusta ruta si es necesario
 
 const BackArrowIcon = () => (
@@ -159,3 +160,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
