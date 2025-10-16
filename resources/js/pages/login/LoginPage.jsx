@@ -11,7 +11,7 @@ export default function LoginPage() {
     return (
         <div className="min-h-screen bg-black text-white flex items-center justify-center p-4 font-sans relative overflow-hidden">
             
-            <GalaxyAnimation className="absolute inset-0 z-0" density={1.6} glowIntensity={0.6}/>
+            <GalaxyAnimation className="absolute inset-0 z-0" density={2.2} glowIntensity={0.6}/>
 
             <div className="w-full max-w-4xl mx-auto bg-slate-800/60 backdrop-blur-sm rounded-2xl shadow-2xl flex flex-col lg:flex-row relative z-10 border border-slate-700">
                 
