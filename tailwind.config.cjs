@@ -1,5 +1,5 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default { // <-- EL ÚNICO CAMBIO ESTÁ AQUÍ
   content: [
     "./resources/**/*.blade.php",
     "./resources/**/*.js",
@@ -7,6 +7,13 @@ module.exports = {
   ],
   theme: {
     extend: {
+      colors: {
+          'brand': {
+              'blue': '#3484A5',   // Azul acero
+              'teal': '#2CA792',   // Verde azulado
+              'yellow': '#F0C84F', // Amarillo dorado
+          },
+      },
       animation: {
         float: "float 6s ease-in-out infinite",
       },
