@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('apellido_paterno', 50);
             $table->string('apellido_materno', 50);
             $table->string('correo', 100)->unique();
-            $table->string('contraseña', 255);
+            $table->string('password', 255);
             $table->string('telefono', 20)->nullable();
             $table->string('direccion', 255)->nullable();
             $table->datetime('fecha_registro')->useCurrent();

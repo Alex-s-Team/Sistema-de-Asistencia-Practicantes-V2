@@ -65,4 +65,30 @@ class User extends Authenticatable
     {
         return $this->hasOne(Practicante::class, 'user_id');
     }
+
+    /**
+     * Define la relación con el modelo Rol.
+     * Esta función ya la tenías y estaba correcta.
+     */
+    public function rol()
+    {
+        return $this->belongsTo(Rol::class, 'rol_id');
+    }
+
+    /**
+     * Define la relación con el modelo Oficina.
+     */
+    public function oficina()
+    {
+        return $this->belongsTo(Oficina::class, 'oficina_id');
+    }
+
+    /**
+     * Define la relación con el modelo Practicante.
+     * Un usuario puede tener un registro de practicante asociado.
+     */
+    public function practicante()
+    {
+        return $this->hasOne(Practicante::class, 'user_id');
+    }
 }
