@@ -70,11 +70,14 @@ export default function LoginPage() {
             <BackArrowIcon />
           </button>
 
-          <h1 className="text-3xl font-bold mb-2 text-slate-100">Login to system</h1>
+          <h1 className="text-3xl font-bold mb-2 text-slate-100">Sistema de Asistencia</h1>
           <p className="text-slate-400 mb-8">
-            Please enter your login information or{' '}
-            <a href="#" className="text-brand-yellow hover:underline font-medium">
-              click here to registration
+            Utilice los siguientes accessos:<br></br>{' '}
+            <a className="text-brand-yellow hover:underline font-medium">
+              admin@empresa.com / admin123<br></br>
+            </a>
+            <a className="text-brand-yellow hover:underline font-medium">
+              supervisor@empresa.com / supervisor123<br></br>
             </a>
           </p>
 
