@@ -8,6 +8,7 @@ import { Card } from '../../Components/Common/Card';
 import { Button } from '../../Components/Common/Button';
 import { Badge } from '../../Components/Common/Badge';
 import { LoadingSpinner } from '../../Components/Common/LoadingSpinner';
+import { Alert } from '../../Components/Common/Alert';
 import {
   UsersIcon,
   ClipboardDocumentCheckIcon,
@@ -19,6 +20,8 @@ import { formatDate } from '../../Utils/helpers';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(''); // 👈 AGREGADO
   const [stats, setStats] = useState({
     totalInterns: 0,
     activeInterns: 0,
@@ -27,9 +30,11 @@ const AdminDashboard = () => {
     todayAttendances: 0,
     activeTasks: 0,
   });
-  const [pendingAttendances, setPendingAttendances] = useState([]);
-  const [recentActivity, setRecentActivity] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [recentData, setRecentData] = useState({ // 👈 AGREGADO
+    interns: [],
+    pendingAttendances: [],
+    tasks: [],
+  });
 
   useEffect(() => {
     loadDashboardData();
@@ -38,33 +43,56 @@ const AdminDashboard = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      setError('');
 
-      // Cargar estadísticas generales
-      const [internsData, attendancesData, tasksData] = await Promise.all([
+      // Las respuestas ya son arrays directamente
+      const [internsData, pendingData, tasksData] = await Promise.all([
         userService.getInterns(),
         attendanceService.getPending(),
-        taskService.getTasks({ status: 'pending,in_progress' }),
+        taskService.getTasks(),
       ]);
 
-      setStats({
-        totalInterns: internsData.total || 0,
-        activeInterns: internsData.data.filter(i => i.is_active).length || 0,
-        pendingAttendances: attendancesData.data?.length || 0,
-        pendingJustifications: 0, // Implementar cuando esté el endpoint
-        todayAttendances: 0, // Implementar filtro por fecha
-        activeTasks: tasksData.data?.length || 0,
+      console.log('Dashboard data:', {
+        interns: internsData,
+        pending: pendingData,
+        tasks: tasksData
       });
 
-      setPendingAttendances(attendancesData.data?.slice(0, 5) || []);
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
+      // Calcular stats
+      setStats({
+        totalInterns: Array.isArray(internsData) ? internsData.length : 0,
+        activeInterns: Array.isArray(internsData) 
+          ? internsData.filter(i => i.is_active).length 
+          : 0,
+        pendingAttendances: Array.isArray(pendingData) ? pendingData.length : 0,
+        pendingJustifications: 0, // TODO: implementar cuando tengamos el endpoint
+        todayAttendances: 0, // TODO: implementar
+        activeTasks: Array.isArray(tasksData) 
+          ? tasksData.filter(t => t.status !== 'completed' && t.status !== 'cancelled').length 
+          : 0,
+      });
+
+      // Guardar datos recientes
+      setRecentData({
+        interns: Array.isArray(internsData) ? internsData.slice(0, 5) : [],
+        pendingAttendances: Array.isArray(pendingData) ? pendingData.slice(0, 5) : [],
+        tasks: Array.isArray(tasksData) ? tasksData.slice(0, 5) : [],
+      });
+
+    } catch (err) {
+      console.error('Error loading dashboard:', err);
+      setError('Error al cargar el dashboard: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
   };
 
   if (loading) {
-    return <LoadingSpinner message="Cargando dashboard..." />;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner size="large" />
+      </div>
+    );
   }
 
   return (
@@ -82,16 +110,32 @@ const AdminDashboard = () => {
         </p>
       </div>
 
+      {/* Error Alert */}
+      {error && (
+        <Alert type="error" message={error} onClose={() => setError('')} />
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-blue-50 to-white border-l-4 border-blue-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Practicantes Activos</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.activeInterns}</p>
-              <p className="text-xs text-gray-500 mt-1">de {stats.totalInterns} total</p>
+              <p className="text-sm text-gray-600 mb-1">Total Practicantes</p>
+              <p className="text-3xl font-bold text-gray-900">{stats.totalInterns}</p>
+              <p className="text-xs text-gray-500 mt-1">registrados</p>
             </div>
             <UsersIcon className="h-12 w-12 text-blue-500" />
+          </div>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-green-50 to-white border-l-4 border-green-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Practicantes Activos</p>
+              <p className="text-3xl font-bold text-gray-900">{stats.activeInterns}</p>
+              <p className="text-xs text-gray-500 mt-1">activos hoy</p>
+            </div>
+            <UsersIcon className="h-12 w-12 text-green-500" />
           </div>
         </Card>
 
@@ -106,25 +150,14 @@ const AdminDashboard = () => {
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-br from-green-50 to-white border-l-4 border-green-500">
+        <Card className="bg-gradient-to-br from-purple-50 to-white border-l-4 border-purple-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Tareas Activas</p>
               <p className="text-3xl font-bold text-gray-900">{stats.activeTasks}</p>
               <p className="text-xs text-gray-500 mt-1">en progreso</p>
             </div>
-            <ClipboardDocumentCheckIcon className="h-12 w-12 text-green-500" />
-          </div>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-red-50 to-white border-l-4 border-red-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Justificaciones</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.pendingJustifications}</p>
-              <p className="text-xs text-gray-500 mt-1">por revisar</p>
-            </div>
-            <ExclamationCircleIcon className="h-12 w-12 text-red-500" />
+            <ClipboardDocumentCheckIcon className="h-12 w-12 text-purple-500" />
           </div>
         </Card>
       </div>
@@ -168,6 +201,44 @@ const AdminDashboard = () => {
         </Link>
       </div>
 
+      {/* Practicantes Activos */}
+      <Card
+        title="Practicantes Activos"
+        subtitle="Lista de practicantes registrados en el sistema"
+        actions={
+          <Link to="/users">
+            <Button variant="outline" size="sm">
+              Ver Todos
+            </Button>
+          </Link>
+        }
+      >
+        {recentData.interns.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <UsersIcon className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+            <p>No hay practicantes activos</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {recentData.interns.map((intern) => (
+              <div
+                key={intern.id}
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex-1">
+                  <h4 className="font-medium text-gray-900">{intern.name}</h4>
+                  <p className="text-sm text-gray-600">{intern.position || 'Practicante'}</p>
+                  <p className="text-xs text-gray-500 mt-1">DNI: {intern.dni}</p>
+                </div>
+                <Badge type="status" value="success">
+                  Activo
+                </Badge>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
       {/* Pending Attendances */}
       <Card
         title="Asistencias Pendientes de Validación"
@@ -180,28 +251,28 @@ const AdminDashboard = () => {
           </Link>
         }
       >
-        {pendingAttendances.length === 0 ? (
+        {recentData.pendingAttendances.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <ClockIcon className="h-16 w-16 mx-auto mb-4 text-gray-400" />
             <p>No hay asistencias pendientes de validación</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {pendingAttendances.map((attendance) => (
+            {recentData.pendingAttendances.map((attendance) => (
               <div
                 key={attendance.id}
                 className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
               >
                 <div className="flex-1">
                   <h4 className="font-medium text-gray-900">
-                    {attendance.user?.name}
+                    {attendance.user?.name || 'Usuario'}
                   </h4>
                   <p className="text-sm text-gray-600 mt-1">
-                    {formatDate(attendance.date)} - {attendance.type === 'entry' ? 'Entrada' : 'Salida'}
+                    {formatDate(attendance.date)} - {attendance.entry_time ? 'Entrada' : 'Salida'}
                   </p>
                   {attendance.is_remote_entry && (
                     <p className="text-xs text-yellow-600 mt-1">
-                      ⚠️ Registro remoto: {attendance.remote_reason}
+                      ⚠️ Registro remoto: {attendance.remote_entry_reason || 'Sin razón especificada'}
                     </p>
                   )}
                 </div>

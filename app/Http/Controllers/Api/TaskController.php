@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Controllers/Api/TaskController.php
 namespace App\Http\Controllers\Api;
 
@@ -7,87 +8,124 @@ use App\Models\Task;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class TaskController extends Controller
 {
     public function index(Request $request)
     {
-        $user = $request->user();
-        $query = Task::with(['creator', 'assignedUsers']);
+        try {
+            $user = $request->user();
 
-        if ($user->isIntern()) {
-            // Practicantes solo ven sus tareas
-            $query->whereHas('assignedUsers', function($q) use ($user) {
-                $q->where('user_id', $user->id);
-            });
+            $query = Task::with(['assignedUsers', 'creator']);
+
+            // Si es practicante, solo ver sus tareas
+            if ($user->isIntern()) {
+                $query->whereHas('assignedUsers', function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                });
+            }
+
+            $tasks = $query->orderBy('created_at', 'desc')->get();
+
+            return response()->json($tasks);
+        } catch (\Exception $e) {
+            Log::error('Error in TaskController@index:', ['message' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Error al obtener tareas',
+                'error' => $e->getMessage()
+            ], 500);
         }
+    }
 
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+    public function myTasks(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            $tasks = Task::with(['assignedUsers', 'creator'])
+                ->whereHas('assignedUsers', function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                })
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return response()->json($tasks);
+        } catch (\Exception $e) {
+            Log::error('Error in TaskController@myTasks:', ['message' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Error al obtener mis tareas',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        if ($request->has('priority')) {
-            $query->where('priority', $request->priority);
-        }
-
-        if ($request->has('assigned_to') && $user->canManageUsers()) {
-            $query->whereHas('assignedUsers', function($q) use ($request) {
-                $q->where('user_id', $request->assigned_to);
-            });
-        }
-
-        $tasks = $query->orderBy('due_date', 'asc')
-                      ->paginate($request->get('per_page', 15));
-
-        return response()->json($tasks);
     }
 
     public function store(Request $request)
     {
-        $user = $request->user();
-
-        if (!$user->canManageUsers()) {
-            return response()->json([
-                'message' => 'No tienes permisos para crear tareas',
-            ], 403);
-        }
-
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'required|string',
-            'start_date' => 'required|date',
-            'due_date' => 'required|date|after_or_equal:start_date',
-            'priority' => 'required|in:low,medium,high',
-            'assigned_users' => 'required|array|min:1',
-            'assigned_users.*' => 'exists:users,id',
-        ]);
-
         try {
-            DB::beginTransaction();
+            $user = $request->user();
 
-            $task = Task::create([
-                'title' => $validated['title'],
-                'description' => $validated['description'],
-                'created_by' => $user->id,
-                'start_date' => $validated['start_date'],
-                'due_date' => $validated['due_date'],
-                'priority' => $validated['priority'],
-                'status' => 'pending',
+            // Verificar permisos
+            if (!$user->canManageUsers()) {
+                return response()->json([
+                    'message' => 'No tienes permisos para crear tareas',
+                ], 403);
+            }
+
+            // Validación
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'priority' => 'required|in:low,medium,high',
+                'status' => 'nullable|in:pending,in_progress,completed,cancelled',
+                'start_date' => 'required|date',
+                'due_date' => 'required|date|after_or_equal:start_date',
+                'assigned_users' => 'required|array|min:1',
+                'assigned_users.*' => 'required|integer|exists:users,id',
+            ], [
+                'assigned_users.required' => 'Debes asignar al menos un usuario',
+                'assigned_users.*.exists' => 'Uno o más usuarios seleccionados no existen',
             ]);
 
+            DB::beginTransaction();
+
+            // Crear tarea
+            $task = Task::create([
+                'title' => $validated['title'],
+                'description' => $validated['description'] ?? null,
+                'priority' => $validated['priority'],
+                'status' => $validated['status'] ?? 'pending',
+                'start_date' => $validated['start_date'],
+                'due_date' => $validated['due_date'],
+                'created_by' => $user->id,
+            ]);
+
+            // Asignar usuarios
             $task->assignedUsers()->attach($validated['assigned_users']);
 
             DB::commit();
 
+            // Recargar relaciones
+            $task->load(['assignedUsers', 'creator']);
+
             return response()->json([
                 'message' => 'Tarea creada exitosamente',
-                'task' => $task->load(['creator', 'assignedUsers']),
+                'task' => $task,
             ], 201);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Error de validación',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('Error in TaskController@store:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
-                'message' => 'Error al crear la tarea',
+                'message' => 'Error al crear tarea',
                 'error' => $e->getMessage(),
             ], 500);
         }
@@ -95,55 +133,68 @@ class TaskController extends Controller
 
     public function show($id)
     {
-        $task = Task::with(['creator', 'assignedUsers'])->findOrFail($id);
-
-        return response()->json($task);
+        try {
+            $task = Task::with(['assignedUsers', 'creator'])->findOrFail($id);
+            return response()->json($task);
+        } catch (\Exception $e) {
+            Log::error('Error in TaskController@show:', ['message' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Tarea no encontrada',
+            ], 404);
+        }
     }
 
     public function update(Request $request, $id)
     {
-        $user = $request->user();
-        $task = Task::findOrFail($id);
-
-        // Solo el creador o admin/staff pueden editar
-        if (!$user->canManageUsers() && $task->created_by !== $user->id) {
-            return response()->json([
-                'message' => 'No tienes permisos para editar esta tarea',
-            ], 403);
-        }
-
-        $validated = $request->validate([
-            'title' => 'sometimes|string|max:255',
-            'description' => 'sometimes|string',
-            'start_date' => 'sometimes|date',
-            'due_date' => 'sometimes|date',
-            'priority' => 'sometimes|in:low,medium,high',
-            'status' => 'sometimes|in:pending,in_progress,completed,cancelled',
-            'progress' => 'sometimes|integer|min:0|max:100',
-            'assigned_users' => 'sometimes|array',
-            'assigned_users.*' => 'exists:users,id',
-        ]);
-
         try {
+            $user = $request->user();
+            $task = Task::findOrFail($id);
+
+            // Verificar permisos
+            if (!$user->canManageUsers() && $task->created_by !== $user->id) {
+                return response()->json([
+                    'message' => 'No tienes permisos para editar esta tarea',
+                ], 403);
+            }
+
+            $validated = $request->validate([
+                'title' => 'sometimes|string|max:255',
+                'description' => 'nullable|string',
+                'priority' => 'sometimes|in:low,medium,high',
+                'status' => 'sometimes|in:pending,in_progress,completed,cancelled',
+                'start_date' => 'sometimes|date',
+                'due_date' => 'sometimes|date|after_or_equal:start_date',
+                'assigned_users' => 'sometimes|array|min:1',
+                'assigned_users.*' => 'integer|exists:users,id',
+            ]);
+
             DB::beginTransaction();
 
-            $task->update($validated);
+            // Actualizar tarea
+            $task->update(array_filter($validated, function($key) {
+                return $key !== 'assigned_users';
+            }, ARRAY_FILTER_USE_KEY));
 
+            // Actualizar usuarios asignados si se proporcionaron
             if (isset($validated['assigned_users'])) {
                 $task->assignedUsers()->sync($validated['assigned_users']);
             }
 
             DB::commit();
 
+            // Recargar relaciones
+            $task->load(['assignedUsers', 'creator']);
+
             return response()->json([
                 'message' => 'Tarea actualizada exitosamente',
-                'task' => $task->load(['creator', 'assignedUsers']),
+                'task' => $task,
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('Error in TaskController@update:', ['message' => $e->getMessage()]);
             return response()->json([
-                'message' => 'Error al actualizar la tarea',
+                'message' => 'Error al actualizar tarea',
                 'error' => $e->getMessage(),
             ], 500);
         }
@@ -151,41 +202,27 @@ class TaskController extends Controller
 
     public function destroy($id)
     {
-        $user = request()->user();
-        $task = Task::findOrFail($id);
+        try {
+            $user = request()->user();
+            $task = Task::findOrFail($id);
 
-        if (!$user->canManageUsers() && $task->created_by !== $user->id) {
+            // Solo el creador o admin/staff pueden eliminar
+            if (!$user->canManageUsers() && $task->created_by !== $user->id) {
+                return response()->json([
+                    'message' => 'No tienes permisos para eliminar esta tarea',
+                ], 403);
+            }
+
+            $task->delete();
+
             return response()->json([
-                'message' => 'No tienes permisos para eliminar esta tarea',
-            ], 403);
+                'message' => 'Tarea eliminada exitosamente',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error in TaskController@destroy:', ['message' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Error al eliminar tarea',
+            ], 500);
         }
-
-        $task->delete();
-
-        return response()->json([
-            'message' => 'Tarea eliminada exitosamente',
-        ]);
-    }
-
-    public function myTasks(Request $request)
-    {
-        $user = $request->user();
-
-        $tasks = Task::with(['creator', 'assignedUsers'])
-            ->whereHas('assignedUsers', function($q) use ($user) {
-                $q->where('user_id', $user->id);
-            })
-            ->orderBy('due_date', 'asc')
-            ->get();
-
-        $grouped = [
-            'pending' => $tasks->where('status', 'pending')->values(),
-            'in_progress' => $tasks->where('status', 'in_progress')->values(),
-            'completed' => $tasks->where('status', 'completed')->values(),
-            'overdue' => $tasks->filter->isOverdue()->values(),
-        ];
-
-        return response()->json($grouped);
     }
 }
-

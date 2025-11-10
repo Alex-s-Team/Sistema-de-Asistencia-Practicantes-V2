@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Controllers/Api/ChatController.php
 namespace App\Http\Controllers\Api;
 
@@ -6,112 +7,184 @@ use App\Http\Controllers\Controller;
 use App\Models\Chat;
 use App\Models\Message;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ChatController extends Controller
 {
     public function index(Request $request)
     {
-        $user = $request->user();
+        try {
+            $user = $request->user();
 
-        $chats = $user->chats()
-            ->with(['users', 'latestMessage.user'])
-            ->get();
+            $chats = $user->chats()
+                ->with(['users', 'messages' => function($query) {
+                    $query->latest()->limit(1);
+                }])
+                ->withCount(['messages as unread_count' => function($query) use ($user) {
+                    $query->where('user_id', '!=', $user->id)
+                          ->where('created_at', '>', function($q) use ($user) {
+                              $q->select('last_read_at')
+                                ->from('chat_user')
+                                ->where('user_id', $user->id)
+                                ->whereColumn('chat_id', 'messages.chat_id');
+                          });
+                }])
+                ->orderBy('updated_at', 'desc')
+                ->get();
 
-        return response()->json($chats);
+            return response()->json($chats);
+        } catch (\Exception $e) {
+            Log::error('Error in ChatController@index:', ['message' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Error al obtener chats',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function store(Request $request)
     {
-        $user = $request->user();
+        try {
+            $validated = $request->validate([
+                'type' => 'required|in:private,group',
+                'name' => 'required_if:type,group|string|max:255',
+                'participants' => 'required|array|min:1',
+                'participants.*' => 'integer|exists:users,id',
+            ]);
 
-        $validated = $request->validate([
-            'type' => 'required|in:public,private',
-            'name' => 'required_if:type,private|string|max:255',
-            'user_ids' => 'required_if:type,private|array',
-            'user_ids.*' => 'exists:users,id',
-        ]);
+            DB::beginTransaction();
 
-        $chat = Chat::create([
-            'name' => $validated['name'] ?? 'Chat Público',
-            'type' => $validated['type'],
-        ]);
+            $user = $request->user();
 
-        if ($validated['type'] === 'private') {
-            $userIds = array_merge($validated['user_ids'], [$user->id]);
-            $chat->users()->attach(array_unique($userIds));
-        } else {
-            // Chat público: agregar todos
-            $allUserIds = \App\Models\User::where('is_active', true)->pluck('id');
-            $chat->users()->attach($allUserIds);
+            // Verificar si ya existe un chat privado con ese usuario
+            if ($validated['type'] === 'private' && count($validated['participants']) === 1) {
+                $otherUserId = $validated['participants'][0];
+                
+                $existingChat = Chat::where('type', 'private')
+                    ->whereHas('users', function($q) use ($user) {
+                        $q->where('user_id', $user->id);
+                    })
+                    ->whereHas('users', function($q) use ($otherUserId) {
+                        $q->where('user_id', $otherUserId);
+                    })
+                    ->first();
+
+                if ($existingChat) {
+                    DB::commit();
+                    return response()->json([
+                        'message' => 'Chat ya existe',
+                        'chat' => $existingChat->load(['users', 'messages']),
+                    ]);
+                }
+            }
+
+            $chat = Chat::create([
+                'type' => $validated['type'],
+                'name' => $validated['name'] ?? null,
+            ]);
+
+            // Agregar participantes (incluyendo al creador)
+            $participants = array_unique(array_merge([$user->id], $validated['participants']));
+            $chat->users()->attach($participants, ['last_read_at' => now()]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Chat creado exitosamente',
+                'chat' => $chat->load(['users', 'messages']),
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error in ChatController@store:', ['message' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Error al crear chat',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-
-        return response()->json([
-            'message' => 'Chat creado exitosamente',
-            'chat' => $chat->load('users'),
-        ], 201);
     }
 
     public function show($id)
     {
-        $chat = Chat::with(['users', 'messages.user'])->findOrFail($id);
+        try {
+            $user = request()->user();
 
-        return response()->json($chat);
+            $chat = Chat::with(['users', 'messages.user'])
+                ->whereHas('users', function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                })
+                ->findOrFail($id);
+
+            // Actualizar last_read_at
+            $chat->users()->updateExistingPivot($user->id, [
+                'last_read_at' => now()
+            ]);
+
+            return response()->json($chat);
+        } catch (\Exception $e) {
+            Log::error('Error in ChatController@show:', ['message' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Chat no encontrado',
+            ], 404);
+        }
     }
 
     public function sendMessage(Request $request, $id)
     {
-        $user = $request->user();
-        $chat = Chat::findOrFail($id);
+        try {
+            $user = $request->user();
 
-        // Verificar que el usuario pertenece al chat
-        if (!$chat->users->contains($user->id)) {
+            $chat = Chat::whereHas('users', function($q) use ($user) {
+                $q->where('user_id', $user->id);
+            })->findOrFail($id);
+
+            $validated = $request->validate([
+                'content' => 'required|string',
+            ]);
+
+            $message = Message::create([
+                'chat_id' => $chat->id,
+                'user_id' => $user->id,
+                'content' => $validated['content'],
+            ]);
+
+            // Actualizar timestamp del chat
+            $chat->touch();
+
             return response()->json([
-                'message' => 'No tienes acceso a este chat',
-            ], 403);
+                'message' => 'Mensaje enviado',
+                'data' => $message->load('user'),
+            ], 201);
+
+        } catch (\Exception $e) {
+            Log::error('Error in ChatController@sendMessage:', ['message' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Error al enviar mensaje',
+            ], 500);
         }
-
-        $validated = $request->validate([
-            'content' => 'required|string',
-            'attachment' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
-        ]);
-
-        $attachmentPath = null;
-
-        if ($request->hasFile('attachment')) {
-            $attachmentPath = $request->file('attachment')->store('chat-attachments', 'public');
-        }
-
-        $message = Message::create([
-            'chat_id' => $chat->id,
-            'user_id' => $user->id,
-            'content' => $validated['content'],
-            'attachment_path' => $attachmentPath,
-        ]);
-
-        return response()->json([
-            'message' => 'Mensaje enviado',
-            'data' => $message->load('user'),
-        ], 201);
     }
 
-    public function getMessages(Request $request, $id)
+    public function getMessages($id)
     {
-        $user = $request->user();
-        $chat = Chat::findOrFail($id);
+        try {
+            $user = request()->user();
 
-        // Verificar que el usuario pertenece al chat
-        if (!$chat->users->contains($user->id)) {
+            $chat = Chat::whereHas('users', function($q) use ($user) {
+                $q->where('user_id', $user->id);
+            })->findOrFail($id);
+
+            $messages = Message::where('chat_id', $chat->id)
+                ->with('user')
+                ->orderBy('created_at', 'asc')
+                ->get();
+
+            return response()->json($messages);
+        } catch (\Exception $e) {
+            Log::error('Error in ChatController@getMessages:', ['message' => $e->getMessage()]);
             return response()->json([
-                'message' => 'No tienes acceso a este chat',
-            ], 403);
+                'message' => 'Error al obtener mensajes',
+            ], 500);
         }
-
-        $messages = $chat->messages()
-            ->with('user')
-            ->orderBy('created_at', 'desc')
-            ->paginate($request->get('per_page', 50));
-
-        return response()->json($messages);
     }
 }

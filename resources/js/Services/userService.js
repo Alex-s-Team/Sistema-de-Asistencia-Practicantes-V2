@@ -1,8 +1,10 @@
+// resources/js/Services/userService.js
 import api from './api';
 
 export const userService = {
   getUsers: async (params = {}) => {
     const response = await api.get('/users', { params });
+    // La respuesta ya ES el array directamente
     return response.data;
   },
 
@@ -26,9 +28,10 @@ export const userService = {
     return response.data;
   },
 
+  // 👇 IMPORTANTE: La respuesta ya es el array directamente
   getInterns: async () => {
     const response = await api.get('/users/interns');
-    return response.data;
+    console.log('getInterns response:', response.data); // Debug
+    return response.data; // Ya es un array directamente
   },
 };
-

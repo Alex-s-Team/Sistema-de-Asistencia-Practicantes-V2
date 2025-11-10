@@ -1,14 +1,17 @@
+// resources/js/Services/taskService.js
 import api from './api';
 
 export const taskService = {
   getTasks: async (params = {}) => {
     const response = await api.get('/tasks', { params });
-    return response.data;
+    console.log('getTasks response:', response.data);
+    return response.data; // Array directamente
   },
 
   getMyTasks: async () => {
     const response = await api.get('/tasks/my-tasks');
-    return response.data;
+    console.log('getMyTasks response:', response.data);
+    return response.data; // Array directamente
   },
 
   getTask: async (id) => {

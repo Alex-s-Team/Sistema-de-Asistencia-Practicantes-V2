@@ -7,6 +7,7 @@ import { Card } from '../../Components/Common/Card';
 import { Button } from '../../Components/Common/Button';
 import { Badge } from '../../Components/Common/Badge';
 import { LoadingSpinner } from '../../Components/Common/LoadingSpinner';
+import { Alert } from '../../Components/Common/Alert';
 import {
   ClipboardDocumentListIcon,
   UsersIcon,
@@ -17,6 +18,8 @@ import { formatDate } from '../../Utils/helpers';
 
 const StaffDashboard = () => {
   const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [stats, setStats] = useState({
     totalTasks: 0,
     pendingTasks: 0,
@@ -25,7 +28,6 @@ const StaffDashboard = () => {
     totalInterns: 0,
   });
   const [recentTasks, setRecentTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadDashboardData();
@@ -34,32 +36,45 @@ const StaffDashboard = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      setError('');
 
       const [tasksData, internsData] = await Promise.all([
         taskService.getTasks(),
         userService.getInterns(),
       ]);
 
-      const tasks = tasksData.data || [];
+      console.log('Staff Dashboard data:', {
+        tasks: tasksData,
+        interns: internsData
+      });
+
+      // Las respuestas ya son arrays directamente
+      const tasks = Array.isArray(tasksData) ? tasksData : [];
+      const interns = Array.isArray(internsData) ? internsData : [];
       
       setStats({
         totalTasks: tasks.length,
         pendingTasks: tasks.filter(t => t.status === 'pending').length,
         inProgressTasks: tasks.filter(t => t.status === 'in_progress').length,
         completedTasks: tasks.filter(t => t.status === 'completed').length,
-        totalInterns: internsData.total || 0,
+        totalInterns: interns.length,
       });
 
       setRecentTasks(tasks.slice(0, 6));
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
+    } catch (err) {
+      console.error('Error loading dashboard:', err);
+      setError('Error al cargar el dashboard: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
   };
 
   if (loading) {
-    return <LoadingSpinner message="Cargando dashboard..." />;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner size="large" />
+      </div>
+    );
   }
 
   return (
@@ -76,6 +91,11 @@ const StaffDashboard = () => {
           {formatDate(new Date(), 'EEEE, dd MMMM yyyy')}
         </p>
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <Alert type="error" message={error} onClose={() => setError('')} />
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -202,7 +222,7 @@ const StaffDashboard = () => {
                   </Badge>
                 </div>
                 <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                  {task.description}
+                  {task.description || 'Sin descripción'}
                 </p>
                 <div className="flex items-center justify-between text-xs text-gray-500">
                   <span>Fecha límite: {formatDate(task.due_date)}</span>

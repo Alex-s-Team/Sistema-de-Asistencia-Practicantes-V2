@@ -1,16 +1,17 @@
+// resources/js/Services/authService.js
 import api from './api';
 
 export const authService = {
-  login: async (email, password) => {
-    const response = await api.post('/login', { email, password });
+  login: async (dni, password) => {  // 👈 CAMBIO: dni en lugar de email
+    const response = await api.post('/login', { dni, password });
     const { token, user } = response.data;
     
-     if (token) {
-        localStorage.setItem('token', token);
-      }
-      if (user) {
-        localStorage.setItem('user', JSON.stringify(user));
-      }
+    if (token) {
+      localStorage.setItem('token', token);
+    }
+    if (user) {
+      localStorage.setItem('user', JSON.stringify(user));
+    }
     
     return { token, user };
   },

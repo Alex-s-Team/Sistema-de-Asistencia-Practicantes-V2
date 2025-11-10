@@ -19,10 +19,11 @@ import { formatDate, formatTime } from '../../Utils/helpers';
 
 const InternDashboard = () => {
   const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [stats, setStats] = useState(null);
   const [todayAttendance, setTodayAttendance] = useState(null);
-  const [myTasks, setMyTasks] = useState({ pending: [], in_progress: [] });
-  const [loading, setLoading] = useState(true);
+  const [myTasks, setMyTasks] = useState([]);
 
   useEffect(() => {
     loadDashboardData();
@@ -31,36 +32,50 @@ const InternDashboard = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      setError('');
       
       // Cargar estadísticas de asistencia
       const statsData = await attendanceService.getStats();
       setStats(statsData);
 
       // Cargar asistencia de hoy
+      const today = new Date().toISOString().split('T')[0];
       const attendances = await attendanceService.getAttendances({ 
-        date: new Date().toISOString().split('T')[0] 
+        date: today 
       });
-      if (attendances.data && attendances.data.length > 0) {
-        setTodayAttendance(attendances.data[0]);
+      
+      // Las respuestas ya son arrays directamente
+      if (Array.isArray(attendances) && attendances.length > 0) {
+        setTodayAttendance(attendances[0]);
       }
 
       // Cargar mis tareas
       const tasksData = await taskService.getMyTasks();
-      setMyTasks(tasksData);
+      const tasks = Array.isArray(tasksData) ? tasksData : [];
+      setMyTasks(tasks);
 
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
+    } catch (err) {
+      console.error('Error loading dashboard:', err);
+      setError('Error al cargar el dashboard: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
   };
 
   if (loading) {
-    return <LoadingSpinner message="Cargando dashboard..." />;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner size="large" />
+      </div>
+    );
   }
 
   const hasMarkedEntry = todayAttendance?.entry_time;
   const hasMarkedExit = todayAttendance?.exit_time;
+
+  // Filtrar tareas
+  const pendingTasks = myTasks.filter(t => t.status === 'pending');
+  const inProgressTasks = myTasks.filter(t => t.status === 'in_progress');
 
   return (
     <div className="space-y-6">
@@ -73,6 +88,11 @@ const InternDashboard = () => {
           Hoy es {formatDate(new Date(), 'EEEE, dd MMMM yyyy')}
         </p>
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <Alert type="error" message={error} onClose={() => setError('')} />
+      )}
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -129,18 +149,18 @@ const InternDashboard = () => {
         </Card>
       </div>
 
-      {/* Today's Status */}
+      {/* Today's Status Alerts */}
       {todayAttendance?.is_remote_entry && (
         <Alert
           type="warning"
-          message={`Has registrado asistencia en modo remoto. Motivo: ${todayAttendance.remote_reason || 'No especificado'}. Esperando validación.`}
+          message={`Has registrado asistencia en modo remoto. Motivo: ${todayAttendance.remote_entry_reason || 'No especificado'}. Esperando validación.`}
         />
       )}
 
       {todayAttendance?.has_delay && (
         <Alert
           type="warning"
-          message={`Has registrado un retraso de ${todayAttendance.delay_minutes} minutos hoy.`}
+          message={`Has registrado un retraso hoy. Tu asistencia está pendiente de aprobación.`}
         />
       )}
 
@@ -185,14 +205,14 @@ const InternDashboard = () => {
           </Link>
         }
       >
-        {myTasks.pending.length === 0 && myTasks.in_progress.length === 0 ? (
+        {myTasks.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <ClipboardDocumentListIcon className="h-16 w-16 mx-auto mb-4 text-gray-400" />
             <p>No tienes tareas activas en este momento</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {[...myTasks.in_progress, ...myTasks.pending].slice(0, 5).map((task) => (
+            {[...inProgressTasks, ...pendingTasks].slice(0, 5).map((task) => (
               <div 
                 key={task.id}
                 className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
@@ -217,21 +237,21 @@ const InternDashboard = () => {
         )}
       </Card>
 
-      {/* Recent Activity */}
+      {/* Additional Info */}
       <Card title="Información Adicional">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">Horario de Practicas</h4>
+            <h4 className="font-medium text-gray-900 mb-2">Horario de Prácticas</h4>
             <p className="text-sm text-gray-600">
-              Entrada: {formatTime(user?.entry_time)}<br />
-              Salida: {formatTime(user?.exit_time)}
+              Entrada: {user?.entry_time ? formatTime(user.entry_time) : 'No especificado'}<br />
+              Salida: {user?.exit_time ? formatTime(user.exit_time) : 'No especificado'}
             </p>
           </div>
           <div>
             <h4 className="font-medium text-gray-900 mb-2">Periodo de Prácticas</h4>
             <p className="text-sm text-gray-600">
-              Inicio: {formatDate(user?.start_date)}<br />
-              Fin estimado: {formatDate(user?.end_date)}
+              Inicio: {user?.start_date ? formatDate(user.start_date) : 'No especificado'}<br />
+              Fin estimado: {user?.end_date ? formatDate(user.end_date) : 'No especificado'}
             </p>
           </div>
         </div>
@@ -241,4 +261,3 @@ const InternDashboard = () => {
 };
 
 export default InternDashboard;
-
