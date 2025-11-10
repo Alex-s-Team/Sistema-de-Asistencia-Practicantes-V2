@@ -62,8 +62,8 @@ const Login = () => {
           <form onSubmit={handleSubmit}>
             <Input
               type="email"
-              label="Correo Electrónico"
-              placeholder="tu@email.com"
+              label="Ingrese su DNI"
+              placeholder="66666666"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -93,12 +93,13 @@ const Login = () => {
           {/* Información de ayuda */}
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600 text-center">
-              👤 Admin: adrian.valer@municipalidad.gob.pe / admin123    <br />
-        👤 Staff: gianfranco.tejada@municipalidad.gob.pe / staff123<br />
-        👤 Practicante: manuel.cuchuyrumi@gmail.com / intern123<br />
-        👤 Practicante: alex.leon@gmail.com / intern123<br />
-        👤 Practicante: carlos.mamani@gmail.com / intern123<br />
-        👤 Practicante: elizabeth.lavilla@gmail.com / intern123<br />
+              👤 Admin: 40956781 / admin123    <br />
+              👤 Staff-1: 73980928 / staff123<br />
+              👤 Staff-2: 70576281 / staff123<br />
+              👤 Practicante-1: 76412311 / intern123<br />
+              👤 Practicante-2: 78016752 / intern123<br />
+              👤 Practicante-3: 75178979 / intern123<br />
+              👤 Practicante-4: 72306843 / intern123<br />
             </p>
           </div>
         </div>

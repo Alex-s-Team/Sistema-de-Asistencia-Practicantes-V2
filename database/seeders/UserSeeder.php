@@ -1,12 +1,13 @@
 <?php
+
 // database/seeders/UserSeeder.php
 namespace Database\Seeders;
 
+use Illuminate\Database\Seeder;
 use App\Models\User;
 use App\Models\Device;
-use App\Models\Chat;
-use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Carbon\Carbon;
 
 class UserSeeder extends Seeder
 {
@@ -14,209 +15,175 @@ class UserSeeder extends Seeder
     {
         // Admin
         $admin = User::create([
-            'name' => 'Adrian Valer Bellota',
-            'email' => 'adrian.valer@municipalidad.gob.pe',
+            'name' => 'Adrian Valer',
+            'email' => '40956781',
             'password' => Hash::make('admin123'),
             'role' => 'admin',
             'gender' => 'masculino',
-            'position' => 'Ingeniero Jefe a cargo de la Oficina de Tecnologías de la Información',
-            'phone' => '999888777',
+            'phone' => '984788038',
+            'position' => 'Ingeniero jefe de sistemas e infomática - Oficina de Tecnologías de la Información',
             'is_active' => true,
         ]);
-        $admin->assignRole('admin');
 
         // Staff 1
         $staff1 = User::create([
-            'name' => 'Marcelo Vizcarra',
-            'email' => 'marcelo.vizcarra@municipalidad.gob.pe',
+            'name' => 'Gian Franco',
+            'email' => '73980928',
             'password' => Hash::make('staff123'),
             'role' => 'staff',
             'gender' => 'masculino',
-            'position' => 'Analista de Sistemas',
-            'phone' => '987654321',
-            'address' => 'Av. Los Incas 456',
-            'district' => 'San Jerónimo',
-            'city' => 'Cusco',
+            'phone' => '987654322',
+            'position' => 'Ingeniero de sistemas e infomática',
             'is_active' => true,
         ]);
-        $staff1->assignRole('staff');
 
         // Staff 2
         $staff2 = User::create([
-            'name' => 'Gianfranco Tejada',
-            'email' => 'gianfranco.tejada@municipalidad.gob.pe',
+            'name' => 'Marcelo Vizcarra',
+            'email' => '70576281',
             'password' => Hash::make('staff123'),
             'role' => 'staff',
             'gender' => 'masculino',
-            'position' => 'Especialista en Redes',
-            'phone' => '987654322',
-            'address' => 'Jr. Saphy 789',
-            'district' => 'Cusco',
-            'city' => 'Cusco',
+            'phone' => '987161526',
+            'position' => 'Ingeniero de sistemas e infomática',
             'is_active' => true,
         ]);
-        $staff2->assignRole('staff');
 
         // Practicante 1
         $intern1 = User::create([
-            'name' => 'Manuel Cuchuyrumi',
-            'email' => 'manuel.cuchuyrumi@gmail.com',
+            'name' => 'Manuel Mamani',
+            'email' => '76412311',
             'password' => Hash::make('intern123'),
             'role' => 'intern',
             'gender' => 'masculino',
-            'birth_date' => '2005-02-21',
+            'birth_date' => '2005-02-23',
             'age' => 20,
-            'phone' => '987456321',
-            'emergency_contact' => '999966574',
-            'address' => 'APV Miraflores Mz A Lt 9',
+            'phone' => '997745372',
+            'emergency_contact' => '997745372',
+            'address' => 'Cerca al mercado Vinocanchon',
             'district' => 'San Jerónimo',
             'city' => 'Cusco',
-            'university' => 'Universidad Andina del Cusco',
+            'university' => 'Universidad Andina',
             'semester' => '8vo',
-            'start_date' => '2025-09-11',
-            'end_date' => '2025-12-11',
+            'position' => 'Practicante de Sistemas',
+            'start_date' => '2025-08-18',
+            'end_date' => '2025-12-31',
             'entry_time' => '09:00:00',
             'exit_time' => '13:00:00',
             'is_active' => true,
         ]);
-        $intern1->assignRole('intern');
 
-        // Dispositivo de practicante 1
         Device::create([
             'user_id' => $intern1->id,
             'device_name' => 'Laptop ASUS',
-            'ip_address' => '192.168.50.236',
+            'ip_address' => '192.168.50.238',
             'device_type' => 'laptop',
-            'is_primary' => true,
         ]);
 
         // Practicante 2
         $intern2 = User::create([
             'name' => 'Alex Leon',
-            'email' => 'alex.leon@gmail.com',
+            'email' => '78016752',
             'password' => Hash::make('intern123'),
             'role' => 'intern',
             'gender' => 'masculino',
-            'birth_date' => '2004-02-21',
+            'birth_date' => '2004-05-30',
             'age' => 21,
-            'phone' => '987451321',
-            'emergency_contact' => '990966574',
-            'address' => 'APV Miraflores Mz A Lt 8',
+            'phone' => '946718455',
+            'emergency_contact' => '946718455',
+            'address' => 'APV Miraflores',
             'district' => 'San Jerónimo',
             'city' => 'Cusco',
-            'university' => 'Universidad Andina del Cusco',
+            'university' => 'Universidad Andina',
             'semester' => '8vo',
-            'start_date' => '2025-09-11',
-            'end_date' => '2025-12-11',
+            'position' => 'Practicante de Sistemas',
+            'start_date' => '2025-08-18',
+            'end_date' => '2025-12-31',
             'entry_time' => '09:00:00',
             'exit_time' => '13:00:00',
             'is_active' => true,
         ]);
-        $intern2->assignRole('intern');
 
         Device::create([
             'user_id' => $intern2->id,
             'device_name' => 'Laptop Lenovo',
             'ip_address' => '192.168.50.237',
             'device_type' => 'laptop',
-            'is_primary' => true,
         ]);
 
         // Practicante 3
         $intern3 = User::create([
-            'name' => 'Carlos Mamani',
-            'email' => 'carlos.mamani@gmail.com',
+            'name' => 'Edwin Machaca',
+            'email' => '75178979',
             'password' => Hash::make('intern123'),
             'role' => 'intern',
             'gender' => 'masculino',
-            'birth_date' => '2003-02-21',
+            'birth_date' => '2004-03-19',
             'age' => 22,
-            'phone' => '987451121',
-            'emergency_contact' => '910966574',
-            'address' => 'APV La Caleta Mz A Lt 8',
-            'district' => 'Santiago',
+            'phone' => '982904726',
+            'emergency_contact' => '982904726',
+            'address' => 'Cerca a la casa del ing Yhion',
+            'district' => 'San Jerónimo',
             'city' => 'Cusco',
-            'university' => 'Universidad Andina del Cusco',
+            'university' => 'Universidad Andina',
             'semester' => '9no',
-            'start_date' => '2025-09-11',
-            'end_date' => '2025-11-11',
-            'entry_time' => '08:00:00',
+            'position' => 'Practicante',
+            'start_date' => '2025-09-10',
+            'end_date' => '2025-12-31',
+            'entry_time' => '09:00:00',
             'exit_time' => '13:00:00',
             'is_active' => true,
         ]);
-        $intern3->assignRole('intern');
 
         Device::create([
             'user_id' => $intern3->id,
             'device_name' => 'Laptop Legion',
-            'ip_address' => '192.168.50.8',
+            'ip_address' => '192.168.50.229',
             'device_type' => 'laptop',
-            'is_primary' => true,
         ]);
 
         // Practicante 4
         $intern4 = User::create([
             'name' => 'Elizabeth Lavilla',
-            'email' => 'elizabeth.lavilla@gmail.com',
+            'email' => '72306843',
             'password' => Hash::make('intern123'),
             'role' => 'intern',
             'gender' => 'femenino',
             'birth_date' => '2005-08-21',
-            'age' => 19,
-            'phone' => '987451311',
-            'emergency_contact' => '990966570',
-            'address' => 'Calle Perú 234',
-            'district' => 'Wánchaq',
+            'age' => 20,
+            'phone' => '990179027',
+            'emergency_contact' => '990179027',
+            'address' => '5to de ttio',
+            'district' => 'Wanchaq',
             'city' => 'Cusco',
             'university' => 'Universidad Continental',
             'semester' => '8vo',
-            'start_date' => '2025-09-11',
-            'end_date' => '2025-12-11',
-            'entry_time' => '08:00:00',
+            'position' => 'Practicante',
+            'start_date' => '2025-09-03',
+            'end_date' => '2025-12-31',
+            'entry_time' => '09:00:00',
             'exit_time' => '13:00:00',
             'is_active' => true,
         ]);
-        $intern4->assignRole('intern');
 
         Device::create([
             'user_id' => $intern4->id,
             'device_name' => 'Laptop Lenovo',
             'ip_address' => '192.168.50.240',
             'device_type' => 'laptop',
-            'is_primary' => true,
         ]);
 
         Device::create([
             'user_id' => $intern4->id,
-            'device_name' => 'Celular Personal',
+            'device_name' => 'Celular',
             'ip_address' => '192.168.50.6',
             'device_type' => 'phone',
-            'is_primary' => false,
         ]);
 
-        // Crear chat público
-        $publicChat = Chat::create([
-            'name' => 'Chat General - Oficina TI',
-            'type' => 'public',
-        ]);
-
-        // Agregar a todos los usuarios al chat público
-        $allUsers = User::all();
-        foreach ($allUsers as $user) {
-            $publicChat->users()->attach($user->id);
-        }
-
-        $this->command->info('✅ Usuarios creados exitosamente:');
-        $this->command->info('👤 Admin: adrian.valer@municipalidad.gob.pe / admin123');
-        $this->command->info('👤 Staff: marcelo.vizcarra@municipalidad.gob.pe / staff123');
-        $this->command->info('👤 Staff: gianfranco.tejada@municipalidad.gob.pe / staff123');
-        $this->command->info('👤 Practicante: manuel.cuchuyrumi@gmail.com / intern123');
-        $this->command->info('👤 Practicante: alex.leon@gmail.com / intern123');
-        $this->command->info('👤 Practicante: carlos.mamani@gmail.com / intern123');
-        $this->command->info('👤 Practicante: elizabeth.lavilla@gmail.com / intern123');
-
-        
+        $this->command->info('Usuarios creados exitosamente!');
+        $this->command->info('Credenciales de prueba:');
+        $this->command->info('Admin: 40956781 / admin123');
+        $this->command->info('Staff: 73980928 / staff123');
+        $this->command->info('76412311 / intern123');
     }
 }
-
-

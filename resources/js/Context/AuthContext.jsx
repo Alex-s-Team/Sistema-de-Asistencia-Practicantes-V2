@@ -1,89 +1,116 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authService } from '../Services/authService';
+// resources/js/Context/AuthContext.jsx
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import api from '../Services/api';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [permissions, setPermissions] = useState([]);
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  useEffect(() => {
-    loadUser();
-  }, []);
+    // Verificar autenticación al cargar
+    useEffect(() => {
+        checkAuth();
+    }, []);
 
-  const loadUser = async () => {
-    try {
-      if (authService.isAuthenticated()) {
-        const data = await authService.getCurrentUser();
-        setUser(data.user);
-        setPermissions(data.permissions || []);
-      }
-    } catch (error) {
-      console.error('Error loading user:', error);
-      logout();
-    } finally {
-      setLoading(false);
-    }
-  };
+    const checkAuth = async () => {
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+            setLoading(false);
+            return;
+        }
 
-  const login = async (email, password) => {
-    const { token, user: userData } = await authService.login(email, password);
-    setUser(userData);
-    setPermissions(userData.permissions || []);
-    return { token, user: userData };
-  };
+        try {
+            const response = await api.get('/me');
+            setUser(response.data.user);
+            setIsAuthenticated(true);
+        } catch (error) {
+            console.error('Error verificando autenticación:', error);
+            localStorage.removeItem('token');
+            setIsAuthenticated(false);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  const logout = async () => {
-    try {
-      await authService.logout();
-    } finally {
-      setUser(null);
-      setPermissions([]);
-    }
-  };
+    const login = async (email, password) => {
+        try {
+            // Asegurarse de que los datos estén en el formato correcto
+            const credentials = {
+                email: email.trim(),
+                password: password
+            };
 
-  const hasPermission = (permission) => {
-    return permissions.includes(permission);
-  };
+            console.log('Intentando login con:', { email: credentials.email });
 
-  const hasRole = (role) => {
-    return user?.role === role;
-  };
+            const response = await api.post('/login', credentials);
+            
+            const { token, user: userData } = response.data;
 
-  const isAdmin = () => hasRole('admin');
-  const isStaff = () => hasRole('staff');
-  const isIntern = () => hasRole('intern');
-  const canManageUsers = () => isAdmin() || isStaff();
+            // Guardar token
+            localStorage.setItem('token', token);
+            
+            // Configurar header de autorización
+            api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
-  const value = {
-    user,
-    loading,
-    permissions,
-    login,
-    logout,
-    loadUser,
-    hasPermission,
-    hasRole,
-    isAdmin,
-    isStaff,
-    isIntern,
-    canManageUsers,
-    isAuthenticated: !!user,
-  };
+            // Actualizar estado
+            setUser(userData);
+            setIsAuthenticated(true);
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+            return userData;
+        } catch (error) {
+            console.error('Error en login:', error);
+            
+            // Limpiar estado en caso de error
+            localStorage.removeItem('token');
+            delete api.defaults.headers.common['Authorization'];
+            setUser(null);
+            setIsAuthenticated(false);
+
+            throw error;
+        }
+    };
+
+    const logout = async () => {
+        try {
+            await api.post('/logout');
+        } catch (error) {
+            console.error('Error en logout:', error);
+        } finally {
+            localStorage.removeItem('token');
+            delete api.defaults.headers.common['Authorization'];
+            setUser(null);
+            setIsAuthenticated(false);
+        }
+    };
+
+    const updateUser = (userData) => {
+        setUser(userData);
+    };
+
+    const value = {
+        user,
+        loading,
+        isAuthenticated,
+        login,
+        logout,
+        updateUser,
+        checkAuth,
+    };
+
+    return (
+        <AuthContext.Provider value={value}>
+            {children}
+        </AuthContext.Provider>
+    );
 };
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error('useAuth debe ser usado dentro de un AuthProvider');
+    }
+    return context;
 };
-
