@@ -9,7 +9,8 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   
-  const [email, setEmail] = useState('');
+  // 👇 CAMBIO: Cambiar nombre de variable a 'dni'
+  const [dni, setDni] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -17,10 +18,18 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    
+    // 👇 CAMBIO: Validar que el DNI tenga 8 dígitos
+    if (dni.length !== 8 || !/^\d+$/.test(dni)) {
+      setError('El DNI debe tener exactamente 8 dígitos');
+      return;
+    }
+    
     setLoading(true);
 
     try {
-      await login(email, password);
+      // 👇 CAMBIO: Pasar DNI en lugar de email
+      await login(dni, password);
       navigate('/');
     } catch (err) {
       setError(err.response?.data?.message || 'Error al iniciar sesión. Verifica tus credenciales.');
@@ -60,14 +69,21 @@ const Login = () => {
           )}
 
           <form onSubmit={handleSubmit}>
+            {/* 👇 CAMBIO: Input para DNI */}
             <Input
-              type="email"
-              label="Ingrese su DNI"
-              placeholder="66666666"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              label="DNI"
+              placeholder="76412311"
+              value={dni}
+              onChange={(e) => {
+                // Solo permitir números y máximo 8 caracteres
+                const value = e.target.value.replace(/\D/g, '').slice(0, 8);
+                setDni(value);
+              }}
               required
               autoFocus
+              maxLength={8}
+              pattern="[0-9]{8}"
             />
 
             <Input
@@ -93,7 +109,7 @@ const Login = () => {
           {/* Información de ayuda */}
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600 text-center">
-              👤 Admin: 40956781 / admin123    <br />
+              👤 Admin: 40956781 / admin123<br />
               👤 Staff-1: 73980928 / staff123<br />
               👤 Staff-2: 70576281 / staff123<br />
               👤 Practicante-1: 76412311 / intern123<br />

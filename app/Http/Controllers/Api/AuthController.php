@@ -17,7 +17,7 @@ class AuthController extends Controller
     {
         // Debug: Ver qué está llegando
         Log::info('Login attempt:', [
-            'email' => $request->email,
+            'dni' => $request->dni,
             'has_password' => !empty($request->password),
             'all_data' => $request->all(),
             'content_type' => $request->header('Content-Type'),
@@ -25,30 +25,30 @@ class AuthController extends Controller
 
         try {
             $validated = $request->validate([
-                'email' => 'required|email',
+                'dni' => 'required|string|size:8|regex:/^[0-9]{8}$/', // Exactamente 8 dígitos
                 'password' => 'required|string',
             ]);
 
-            $user = User::where('email', $validated['email'])->first();
+            $user = User::where('dni', $validated['dni'])->first();
 
             if (!$user) {
-                Log::warning('Login failed: User not found', ['email' => $validated['email']]);
+                Log::warning('Login failed: User not found', ['dni' => $validated['dni']]);
                 throw ValidationException::withMessages([
-                    'email' => ['Las credenciales proporcionadas son incorrectas.'],
+                    'dni' => ['Las credenciales proporcionadas son incorrectas.'],
                 ]);
             }
 
             if (!Hash::check($validated['password'], $user->password)) {
-                Log::warning('Login failed: Invalid password', ['email' => $validated['email']]);
+                Log::warning('Login failed: Invalid password', ['dni' => $validated['dni']]);
                 throw ValidationException::withMessages([
-                    'email' => ['Las credenciales proporcionadas son incorrectas.'],
+                    'dni' => ['Las credenciales proporcionadas son incorrectas.'],
                 ]);
             }
 
             if (!$user->is_active) {
-                Log::warning('Login failed: User inactive', ['email' => $validated['email']]);
+                Log::warning('Login failed: User inactive', ['dni' => $validated['dni']]);
                 throw ValidationException::withMessages([
-                    'email' => ['Tu cuenta ha sido desactivada. Contacta al administrador.'],
+                    'dni' => ['Tu cuenta ha sido desactivada. Contacta al administrador.'],
                 ]);
             }
 
@@ -58,13 +58,14 @@ class AuthController extends Controller
             // Crear nuevo token
             $token = $user->createToken('auth-token')->plainTextToken;
 
-            Log::info('Login successful', ['email' => $validated['email'], 'user_id' => $user->id]);
+            Log::info('Login successful', ['dni' => $validated['dni'], 'user_id' => $user->id]);
 
             return response()->json([
                 'token' => $token,
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,
+                    'dni' => $user->dni,
                     'email' => $user->email,
                     'role' => $user->role,
                     'gender' => $user->gender,

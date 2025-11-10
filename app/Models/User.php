@@ -15,7 +15,7 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, HasRoles, SoftDeletes;
 
     protected $fillable = [
-        'name', 'email', 'password', 'role', 'gender', 'birth_date', 'age',
+        'name','dni' , 'email', 'password', 'role', 'gender', 'birth_date', 'age',
         'phone', 'emergency_contact', 'address', 'district', 'city',
         'university', 'semester', 'position', 'start_date', 'end_date',
         'entry_time', 'exit_time', 'is_active',
@@ -31,6 +31,11 @@ class User extends Authenticatable
         'is_active' => 'boolean',
     ];
 
+    public function getAuthIdentifierName()
+    {
+        return 'dni';
+    }
+    
     // Relaciones
     public function attendances()
     {

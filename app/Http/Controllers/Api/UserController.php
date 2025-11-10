@@ -42,9 +42,11 @@ class UserController extends Controller
             ], 403);
         }
 
+        // 👇 CAMBIO: Validar DNI en lugar de email
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
+            'dni' => 'required|string|size:8|regex:/^[0-9]{8}$/|unique:users,dni', // 👈 DNI obligatorio
+            'email' => 'nullable|email|unique:users,email', // 👈 Email opcional
             'password' => 'required|string|min:8',
             'role' => 'required|in:admin,staff,intern',
             'gender' => 'required|in:masculino,femenino',
@@ -127,9 +129,11 @@ class UserController extends Controller
 
         $user = User::findOrFail($id);
 
+        // 👇 CAMBIO: Validar DNI en actualización
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
-            'email' => 'sometimes|email|unique:users,email,' . $id,
+            'dni' => 'sometimes|string|size:8|regex:/^[0-9]{8}$/|unique:users,dni,' . $id,
+            'email' => 'sometimes|nullable|email|unique:users,email,' . $id,
             'role' => 'sometimes|in:admin,staff,intern',
             'gender' => 'sometimes|in:masculino,femenino',
             'phone' => 'nullable|string',

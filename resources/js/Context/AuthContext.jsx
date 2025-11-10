@@ -35,15 +35,16 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const login = async (email, password) => {
+    // 👇 CAMBIO: Función login ahora recibe DNI en lugar de email
+    const login = async (dni, password) => {
         try {
             // Asegurarse de que los datos estén en el formato correcto
             const credentials = {
-                email: email.trim(),
+                dni: dni.trim(), // 👈 Enviar DNI
                 password: password
             };
 
-            console.log('Intentando login con:', { email: credentials.email });
+            console.log('Intentando login con DNI:', credentials.dni);
 
             const response = await api.post('/login', credentials);
             

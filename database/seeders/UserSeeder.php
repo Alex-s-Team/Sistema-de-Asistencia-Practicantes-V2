@@ -16,7 +16,8 @@ class UserSeeder extends Seeder
         // Admin
         $admin = User::create([
             'name' => 'Adrian Valer',
-            'email' => '40956781',
+            'dni' => '40956781',
+            'email' => 'adrian.valer@municipalidad.gob.pe',
             'password' => Hash::make('admin123'),
             'role' => 'admin',
             'gender' => 'masculino',
@@ -28,7 +29,8 @@ class UserSeeder extends Seeder
         // Staff 1
         $staff1 = User::create([
             'name' => 'Gian Franco',
-            'email' => '73980928',
+            'dni' => '73980928',
+            'email' => 'gianfranco.tejada@municipalidad.gob.pe',
             'password' => Hash::make('staff123'),
             'role' => 'staff',
             'gender' => 'masculino',
@@ -40,7 +42,8 @@ class UserSeeder extends Seeder
         // Staff 2
         $staff2 = User::create([
             'name' => 'Marcelo Vizcarra',
-            'email' => '70576281',
+            'dni' => '70576281',
+            'email' => 'marcelo.vizcarra@municipalidad.gob.pe',
             'password' => Hash::make('staff123'),
             'role' => 'staff',
             'gender' => 'masculino',
@@ -52,7 +55,8 @@ class UserSeeder extends Seeder
         // Practicante 1
         $intern1 = User::create([
             'name' => 'Manuel Mamani',
-            'email' => '76412311',
+            'dni' => '76412311',
+            'email' => 'manuel.mamani@gmail.com',
             'password' => Hash::make('intern123'),
             'role' => 'intern',
             'gender' => 'masculino',
@@ -83,7 +87,8 @@ class UserSeeder extends Seeder
         // Practicante 2
         $intern2 = User::create([
             'name' => 'Alex Leon',
-            'email' => '78016752',
+            'dni' => '78016752',
+            'email' => 'alex.leon@gmail.com',
             'password' => Hash::make('intern123'),
             'role' => 'intern',
             'gender' => 'masculino',
@@ -114,7 +119,8 @@ class UserSeeder extends Seeder
         // Practicante 3
         $intern3 = User::create([
             'name' => 'Edwin Machaca',
-            'email' => '75178979',
+            'dni' => '75178979',
+            'email' => 'edwin.machaca@gmail.com',
             'password' => Hash::make('intern123'),
             'role' => 'intern',
             'gender' => 'masculino',
@@ -145,7 +151,8 @@ class UserSeeder extends Seeder
         // Practicante 4
         $intern4 = User::create([
             'name' => 'Elizabeth Lavilla',
-            'email' => '72306843',
+            'dni' => '72306843',
+            'email' => 'elizabeth.lavilla@gmail.com',
             'password' => Hash::make('intern123'),
             'role' => 'intern',
             'gender' => 'femenino',
