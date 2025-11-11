@@ -1,37 +1,47 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../Context/AuthContext';
 import { userService } from '../../Services/userService';
 import { Card } from '../../Components/Common/Card';
 import { Button } from '../../Components/Common/Button';
 import { Input } from '../../Components/Common/Input';
 import { Select } from '../../Components/Common/Select';
 import { Badge } from '../../Components/Common/Badge';
-import { Alert } from '../../Components/Common/Alert';
-import { LoadingSpinner } from '../../Components/Common/LoadingSpinner';
 import { Modal } from '../../Components/Common/Modal';
-import { Table } from '../../Components/Common/Table';
+import { LoadingSpinner } from '../../Components/Common/LoadingSpinner';
+import { Alert } from '../../Components/Common/Alert';
 import {
-  PlusCircleIcon,
+  PlusIcon,
   PencilIcon,
   TrashIcon,
-  UserIcon,
+  MagnifyingGlassIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/outline';
 import { formatDate } from '../../Utils/helpers';
 
 const UserManagement = () => {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  
+  // Modal states
   const [showModal, setShowModal] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState({ type: '', text: '' });
-  const [filterRole, setFilterRole] = useState('all');
-
+  const [modalMode, setModalMode] = useState('create'); // 'create' or 'edit'
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
+  // Form state
   const [formData, setFormData] = useState({
     name: '',
+    dni: '',
     email: '',
     password: '',
     role: 'intern',
-    gender: '',
+    gender: 'masculino',
     birth_date: '',
     phone: '',
     emergency_contact: '',
@@ -43,39 +53,105 @@ const UserManagement = () => {
     position: '',
     start_date: '',
     end_date: '',
-    entry_time: '',
-    exit_time: '',
+    entry_time: '08:00',
+    exit_time: '13:00',
   });
 
   useEffect(() => {
     loadUsers();
   }, []);
 
+  useEffect(() => {
+    filterUsers();
+  }, [users, searchTerm, roleFilter]);
+
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const response = await userService.getUsers();
-      setUsers(response.data || []);
-    } catch (error) {
-      console.error('Error loading users:', error);
-      setMessage({ type: 'error', text: 'Error al cargar usuarios' });
+      setError('');
+      
+      // La respuesta ya es un array directamente
+      const usersData = await userService.getUsers();
+      
+      console.log('Users loaded:', usersData);
+      
+      // Validar que sea un array
+      const usersList = Array.isArray(usersData) ? usersData : [];
+      setUsers(usersList);
+      setFilteredUsers(usersList);
+    } catch (err) {
+      console.error('Error loading users:', err);
+      setError('Error al cargar usuarios: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const filterUsers = () => {
+    let filtered = [...users];
+
+    // Filtrar por búsqueda
+    if (searchTerm) {
+      filtered = filtered.filter(user =>
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.dni?.includes(searchTerm) ||
+        user.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Filtrar por rol
+    if (roleFilter !== 'all') {
+      filtered = filtered.filter(user => user.role === roleFilter);
+    }
+
+    setFilteredUsers(filtered);
+  };
+
+  const handleOpenModal = (mode, user = null) => {
+    setModalMode(mode);
+    if (mode === 'edit' && user) {
+      setSelectedUser(user);
+      setFormData({
+        name: user.name || '',
+        dni: user.dni || '',
+        email: user.email || '',
+        password: '', // No prellenar password
+        role: user.role || 'intern',
+        gender: user.gender || 'masculino',
+        birth_date: user.birth_date || '',
+        phone: user.phone || '',
+        emergency_contact: user.emergency_contact || '',
+        address: user.address || '',
+        district: user.district || '',
+        city: user.city || '',
+        university: user.university || '',
+        semester: user.semester || '',
+        position: user.position || '',
+        start_date: user.start_date || '',
+        end_date: user.end_date || '',
+        entry_time: user.entry_time || '08:00',
+        exit_time: user.exit_time || '13:00',
+      });
+    } else {
+      resetForm();
+    }
+    setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setSelectedUser(null);
+    resetForm();
   };
 
   const resetForm = () => {
     setFormData({
       name: '',
+      dni: '',
       email: '',
       password: '',
       role: 'intern',
-      gender: '',
+      gender: 'masculino',
       birth_date: '',
       phone: '',
       emergency_contact: '',
@@ -87,165 +163,78 @@ const UserManagement = () => {
       position: '',
       start_date: '',
       end_date: '',
-      entry_time: '',
-      exit_time: '',
+      entry_time: '08:00',
+      exit_time: '13:00',
     });
-    setEditingUser(null);
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
+    setError('');
+    setSuccess('');
 
     try {
-      if (editingUser) {
-        await userService.updateUser(editingUser.id, formData);
-        setMessage({ type: 'success', text: 'Usuario actualizado correctamente' });
-      } else {
+      if (modalMode === 'create') {
         await userService.createUser(formData);
-        setMessage({ type: 'success', text: 'Usuario creado correctamente' });
+        setSuccess('Usuario creado exitosamente');
+      } else {
+        // En modo edición, no enviar password si está vacío
+        const updateData = { ...formData };
+        if (!updateData.password) {
+          delete updateData.password;
+        }
+        await userService.updateUser(selectedUser.id, updateData);
+        setSuccess('Usuario actualizado exitosamente');
       }
-
-      setShowModal(false);
-      resetForm();
-      await loadUsers();
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: error.response?.data?.message || 'Error al guardar usuario',
-      });
-    } finally {
-      setSubmitting(false);
+      
+      handleCloseModal();
+      loadUsers();
+      
+      // Limpiar mensaje de éxito después de 3 segundos
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error saving user:', err);
+      setError(err.response?.data?.message || 'Error al guardar usuario');
     }
   };
 
-  const handleEdit = (user) => {
-    setEditingUser(user);
-    setFormData({
-      name: user.name || '',
-      email: user.email || '',
-      password: '',
-      role: user.role || 'intern',
-      gender: user.gender || '',
-      birth_date: user.birth_date || '',
-      phone: user.phone || '',
-      emergency_contact: user.emergency_contact || '',
-      address: user.address || '',
-      district: user.district || '',
-      city: user.city || '',
-      university: user.university || '',
-      semester: user.semester || '',
-      position: user.position || '',
-      start_date: user.start_date || '',
-      end_date: user.end_date || '',
-      entry_time: user.entry_time || '',
-      exit_time: user.exit_time || '',
-    });
-    setShowModal(true);
-  };
-
-  const handleDelete = async (userId) => {
-    if (!confirm('¿Estás seguro de eliminar este usuario?')) return;
+  const handleDelete = async () => {
+    if (!selectedUser) return;
 
     try {
-      await userService.deleteUser(userId);
-      setMessage({ type: 'success', text: 'Usuario eliminado correctamente' });
-      await loadUsers();
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: error.response?.data?.message || 'Error al eliminar usuario',
-      });
+      await userService.deleteUser(selectedUser.id);
+      setSuccess('Usuario desactivado exitosamente');
+      setShowDeleteConfirm(false);
+      setSelectedUser(null);
+      loadUsers();
+      
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      setError(err.response?.data?.message || 'Error al eliminar usuario');
     }
   };
 
-  const filteredUsers = filterRole === 'all' 
-    ? users 
-    : users.filter(u => u.role === filterRole);
-
-  const columns = [
-    {
-      header: 'Nombre',
-      accessor: 'name',
-      render: (user) => (
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-            <span className="text-lg font-bold text-primary-600">
-              {user.name?.charAt(0)}
-            </span>
-          </div>
-          <div>
-            <p className="font-medium text-gray-900">{user.name}</p>
-            <p className="text-sm text-gray-600">{user.email}</p>
-          </div>
-        </div>
-      ),
-    },
-    {
-      header: 'Rol',
-      accessor: 'role',
-      render: (user) => (
-        <Badge type="role" value={user.role}>
-          {user.role === 'admin' ? 'Admin' : user.role === 'staff' ? 'Personal' : 'Practicante'}
-        </Badge>
-      ),
-    },
-    {
-      header: 'Universidad / Cargo',
-      accessor: 'university',
-      render: (user) => (
-        <span className="text-sm text-gray-600">
-          {user.role === 'intern' ? user.university : user.position || '-'}
-        </span>
-      ),
-    },
-    {
-      header: 'Periodo',
-      accessor: 'start_date',
-      render: (user) => (
-        user.role === 'intern' && user.start_date ? (
-          <div className="text-sm text-gray-600">
-            <div>{formatDate(user.start_date)}</div>
-            <div>{formatDate(user.end_date)}</div>
-          </div>
-        ) : '-'
-      ),
-    },
-    {
-      header: 'Estado',
-      accessor: 'is_active',
-      render: (user) => (
-        <Badge type="status" value={user.is_active ? 'approved' : 'rejected'}>
-          {user.is_active ? 'Activo' : 'Inactivo'}
-        </Badge>
-      ),
-    },
-    {
-      header: 'Acciones',
-      accessor: 'actions',
-      render: (user) => (
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleEdit(user)}
-          >
-            <PencilIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => handleDelete(user.id)}
-          >
-            <TrashIcon className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
-    },
-  ];
+  const getRoleBadge = (role) => {
+    const badges = {
+      admin: { label: 'Administrador', color: 'red' },
+      staff: { label: 'Personal', color: 'blue' },
+      intern: { label: 'Practicante', color: 'green' },
+    };
+    return badges[role] || badges.intern;
+  };
 
   if (loading) {
-    return <LoadingSpinner message="Cargando usuarios..." />;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner size="large" />
+      </div>
+    );
   }
 
   return (
@@ -254,66 +243,170 @@ const UserManagement = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Gestión de Usuarios</h1>
-          <p className="text-gray-600 mt-1">
-            Administra los usuarios del sistema
+          <p className="mt-2 text-gray-600">
+            Administra usuarios del sistema - {filteredUsers.length} usuario(s) encontrado(s)
           </p>
         </div>
         <Button
           variant="primary"
-          onClick={() => {
-            resetForm();
-            setShowModal(true);
-          }}
+          onClick={() => handleOpenModal('create')}
+          className="flex items-center gap-2"
         >
-          <PlusCircleIcon className="h-5 w-5 mr-2" />
+          <PlusIcon className="h-5 w-5" />
           Nuevo Usuario
         </Button>
       </div>
 
-      {/* Messages */}
-      {message.text && (
-        <Alert
-          type={message.type}
-          message={message.text}
-          onClose={() => setMessage({ type: '', text: '' })}
-        />
-      )}
+      {/* Alerts */}
+      {error && <Alert type="error" message={error} onClose={() => setError('')} />}
+      {success && <Alert type="success" message={success} onClose={() => setSuccess('')} />}
 
       {/* Filters */}
       <Card>
-        <div className="flex gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            <Input
+              type="text"
+              placeholder="Buscar por nombre, DNI o email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              icon={<MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />}
+            />
+          </div>
           <Select
-            label="Filtrar por rol"
-            value={filterRole}
-            onChange={(e) => setFilterRole(e.target.value)}
-            options={[
-              { value: 'all', label: 'Todos los roles' },
-              { value: 'admin', label: 'Administradores' },
-              { value: 'staff', label: 'Personal' },
-              { value: 'intern', label: 'Practicantes' },
-            ]}
-          />
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+          >
+            <option value="all">Todos los roles</option>
+            <option value="admin">Administradores</option>
+            <option value="staff">Personal</option>
+            <option value="intern">Practicantes</option>
+          </Select>
         </div>
       </Card>
 
-      {/* Users Table */}
+      {/* Users List */}
       <Card>
-        <Table
-          columns={columns}
-          data={filteredUsers}
-          emptyMessage="No hay usuarios registrados"
-        />
+        {filteredUsers.length === 0 ? (
+          <div className="text-center py-12">
+            <UserGroupIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600">No se encontraron usuarios</p>
+            <Button
+              variant="primary"
+              size="sm"
+              className="mt-4"
+              onClick={() => handleOpenModal('create')}
+            >
+              Crear Primer Usuario
+            </Button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Usuario
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    DNI
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Rol
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Contacto
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Estado
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredUsers.map((user) => {
+                  const roleBadge = getRoleBadge(user.role);
+                  return (
+                    <tr key={user.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center">
+                            <span className="text-primary-700 font-semibold">
+                              {user.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">
+                              {user.name}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {user.email || 'Sin email'}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{user.dni}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <Badge type="role" value={user.role}>
+                          {roleBadge.label}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {user.phone || 'Sin teléfono'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <Badge type="status" value={user.is_active ? 'success' : 'error'}>
+                          {user.is_active ? 'Activo' : 'Inactivo'}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenModal('edit', user)}
+                          >
+                            <PencilIcon className="h-4 w-4" />
+                          </Button>
+                          {/* 👇 CAMBIO: Comparación directa en lugar de método */}
+                          {currentUser?.role === 'admin' && user.id !== currentUser.id && (
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setShowDeleteConfirm(true);
+                              }}
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
-      {/* User Form Modal */}
+      {/* Create/Edit Modal */}
       <Modal
         isOpen={showModal}
-        onClose={() => !submitting && setShowModal(false)}
-        title={editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
-        size="xl"
+        onClose={handleCloseModal}
+        title={modalMode === 'create' ? 'Crear Nuevo Usuario' : 'Editar Usuario'}
+        size="large"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Basic Info */}
+          {/* Información Básica */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Nombre Completo"
@@ -323,175 +416,181 @@ const UserManagement = () => {
               required
             />
             <Input
-              label="Correo Electrónico"
-              name="email"
-              type="email"
-              value={formData.email}
+              label="DNI"
+              name="dni"
+              value={formData.dni}
               onChange={handleInputChange}
+              maxLength={8}
+              pattern="[0-9]{8}"
               required
             />
-            {!editingUser && (
-              <Input
-                label="Contraseña"
-                name="password"
-                type="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                required
-              />
-            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Email"
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange}
+            />
+            <Input
+              label={modalMode === 'create' ? 'Contraseña' : 'Nueva Contraseña (opcional)'}
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleInputChange}
+              required={modalMode === 'create'}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select
               label="Rol"
               name="role"
               value={formData.role}
               onChange={handleInputChange}
-              options={[
-                { value: 'intern', label: 'Practicante' },
-                { value: 'staff', label: 'Personal' },
-                { value: 'admin', label: 'Administrador' },
-              ]}
               required
-            />
+            >
+              <option value="admin">Administrador</option>
+              <option value="staff">Personal</option>
+              <option value="intern">Practicante</option>
+            </Select>
             <Select
               label="Género"
               name="gender"
               value={formData.gender}
               onChange={handleInputChange}
-              options={[
-                { value: '', label: 'Seleccionar...' },
-                { value: 'masculino', label: 'Masculino' },
-                { value: 'femenino', label: 'Femenino' },
-              ]}
+              required
+            >
+              <option value="masculino">Masculino</option>
+              <option value="femenino">Femenino</option>
+            </Select>
+          </div>
+
+          {/* Información de Contacto */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Teléfono"
+              name="phone"
+              value={formData.phone}
+              onChange={handleInputChange}
             />
             <Input
-              label="Fecha de Nacimiento"
-              name="birth_date"
-              type="date"
-              value={formData.birth_date}
+              label="Contacto de Emergencia"
+              name="emergency_contact"
+              value={formData.emergency_contact}
               onChange={handleInputChange}
             />
           </div>
 
-          {/* Contact Info */}
-          <div className="border-t pt-4">
-            <h3 className="font-semibold text-gray-900 mb-3">Información de Contacto</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Teléfono"
-                name="phone"
-                value={formData.phone}
-                onChange={handleInputChange}
-              />
-              <Input
-                label="Contacto de Emergencia"
-                name="emergency_contact"
-                value={formData.emergency_contact}
-                onChange={handleInputChange}
-              />
-              <Input
-                label="Dirección"
-                name="address"
-                value={formData.address}
-                onChange={handleInputChange}
-              />
-              <Input
-                label="Distrito"
-                name="district"
-                value={formData.district}
-                onChange={handleInputChange}
-              />
-              <Input
-                label="Ciudad"
-                name="city"
-                value={formData.city}
-                onChange={handleInputChange}
-              />
-            </div>
-          </div>
-
-          {/* Intern Specific Fields */}
+          {/* Información adicional para practicantes */}
           {formData.role === 'intern' && (
-            <div className="border-t pt-4">
-              <h3 className="font-semibold text-gray-900 mb-3">Información de Prácticas</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input
-                  label="Universidad"
-                  name="university"
-                  value={formData.university}
-                  onChange={handleInputChange}
-                />
-                <Input
-                  label="Semestre"
-                  name="semester"
-                  value={formData.semester}
-                  onChange={handleInputChange}
-                />
-                <Input
-                  label="Fecha de Inicio"
-                  name="start_date"
-                  type="date"
-                  value={formData.start_date}
-                  onChange={handleInputChange}
-                />
-                <Input
-                  label="Fecha de Fin"
-                  name="end_date"
-                  type="date"
-                  value={formData.end_date}
-                  onChange={handleInputChange}
-                />
-                <Input
-                  label="Hora de Entrada"
-                  name="entry_time"
-                  type="time"
-                  value={formData.entry_time}
-                  onChange={handleInputChange}
-                />
-                <Input
-                  label="Hora de Salida"
-                  name="exit_time"
-                  type="time"
-                  value={formData.exit_time}
-                  onChange={handleInputChange}
-                />
+            <>
+              <div className="border-t pt-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">
+                  Información de Prácticas
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Universidad"
+                    name="university"
+                    value={formData.university}
+                    onChange={handleInputChange}
+                  />
+                  <Input
+                    label="Semestre"
+                    name="semester"
+                    value={formData.semester}
+                    onChange={handleInputChange}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <Input
+                    label="Fecha de Inicio"
+                    type="date"
+                    name="start_date"
+                    value={formData.start_date}
+                    onChange={handleInputChange}
+                  />
+                  <Input
+                    label="Fecha de Fin"
+                    type="date"
+                    name="end_date"
+                    value={formData.end_date}
+                    onChange={handleInputChange}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <Input
+                    label="Hora de Entrada"
+                    type="time"
+                    name="entry_time"
+                    value={formData.entry_time}
+                    onChange={handleInputChange}
+                  />
+                  <Input
+                    label="Hora de Salida"
+                    type="time"
+                    name="exit_time"
+                    value={formData.exit_time}
+                    onChange={handleInputChange}
+                  />
+                </div>
               </div>
-            </div>
+            </>
           )}
 
-          {/* Staff/Admin Specific Fields */}
-          {(formData.role === 'staff' || formData.role === 'admin') && (
-            <div className="border-t pt-4">
-              <h3 className="font-semibold text-gray-900 mb-3">Información Laboral</h3>
-              <Input
-                label="Cargo"
-                name="position"
-                value={formData.position}
-                onChange={handleInputChange}
-              />
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-4">
+          {/* Botones */}
+          <div className="flex justify-end gap-3 pt-4 border-t">
             <Button
+              type="button"
               variant="outline"
-              onClick={() => setShowModal(false)}
-              disabled={submitting}
-              className="flex-1"
+              onClick={handleCloseModal}
             >
               Cancelar
             </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              loading={submitting}
-              disabled={submitting}
-              className="flex-1"
-            >
-              {editingUser ? 'Actualizar' : 'Crear'} Usuario
+            <Button type="submit" variant="primary">
+              {modalMode === 'create' ? 'Crear Usuario' : 'Guardar Cambios'}
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteConfirm}
+        onClose={() => {
+          setShowDeleteConfirm(false);
+          setSelectedUser(null);
+        }}
+        title="Confirmar Eliminación"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            ¿Estás seguro de que deseas desactivar al usuario <strong>{selectedUser?.name}</strong>?
+          </p>
+          <p className="text-sm text-gray-500">
+            Esta acción marcará al usuario como inactivo.
+          </p>
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteConfirm(false);
+                setSelectedUser(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button variant="danger" onClick={handleDelete}>
+              Desactivar Usuario
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
