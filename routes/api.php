@@ -71,12 +71,40 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{id}', [UserController::class, 'destroy']);
     });
 
-    // Chat
+    // Chat - Rutas mejoradas y ampliadas
     Route::prefix('chats')->group(function () {
+        // Listar todos los chats del usuario
         Route::get('/', [ChatController::class, 'index']);
+        
+        // Buscar usuarios para crear chat privado
+        Route::get('/search-users', [ChatController::class, 'searchUsers']);
+        
+        // Listar chats públicos disponibles
+        Route::get('/public', [ChatController::class, 'publicChats']);
+        
+        // Crear nuevo chat
         Route::post('/', [ChatController::class, 'store']);
-        Route::get('/{id}', [ChatController::class, 'show']);
-        Route::post('/{id}/messages', [ChatController::class, 'sendMessage']);
-        Route::get('/{id}/messages', [ChatController::class, 'getMessages']);
+        
+        // Operaciones específicas de un chat
+        Route::prefix('{id}')->group(function () {
+            // Obtener detalles del chat
+            Route::get('/', [ChatController::class, 'show']);
+            
+            // Unirse a un chat público
+            Route::post('/join', [ChatController::class, 'join']);
+            
+            // Salir de un chat
+            Route::post('/leave', [ChatController::class, 'leave']);
+            
+            // Mensajes
+            Route::get('/messages', [ChatController::class, 'getMessages']);
+            Route::post('/messages', [ChatController::class, 'sendMessage']);
+            
+            // Marcar como leído
+            Route::post('/mark-as-read', [ChatController::class, 'markAsRead']);
+            
+            // Indicador de "escribiendo..."
+            Route::post('/typing', [ChatController::class, 'typing']);
+        });
     });
 });

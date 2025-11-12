@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './Context/AuthContext';
 import { LoadingSpinner } from './Components/Common/LoadingSpinner';
+import { ChatProvider } from './Context/ChatContext';
 
 // Pages
 import Login from './Pages/Auth/Login';
@@ -13,6 +14,7 @@ import ValidateAttendance from './Pages/Admin/ValidateAttendance';
 import UserManagement from './Pages/Admin/UserManagement';
 import TaskManagement from './Pages/Staff/TaskManagement';
 import MyTasks from './Pages/Intern/MyTasks';
+import ChatPage from './Pages/Chat/ChatPage';
 
 // Layout
 import Layout from './Components/Layout/Layout';
@@ -121,6 +123,16 @@ const AppRoutes = () => {
             </ProtectedRoute>
           }
         />
+
+        {/* Chat Route - Accesible para todos los usuarios autenticados */}
+        <Route
+          path="chat"
+          element={
+            <ProtectedRoute>
+              <ChatPage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -131,12 +143,13 @@ const AppRoutes = () => {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <AppRoutes />
-      </Router>
+      <ChatProvider>  
+        <Router>
+          <AppRoutes />
+        </Router>
+      </ChatProvider>  
     </AuthProvider>
   );
 }
 
 export default App;
-
