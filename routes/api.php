@@ -1,6 +1,5 @@
 <?php
 
-// routes/api.php
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AttendanceController;
@@ -22,19 +21,19 @@ Route::post('/login', [AuthController::class, 'login']);
 // Rutas protegidas
 Route::middleware(['auth:sanctum'])->group(function () {
     
-    // Autenticación
+    // ========== AUTENTICACIÓN ==========
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
 
-    // QR Code (Solo admin y staff)
+    // ========== QR CODE (Solo admin y staff) ==========
     Route::prefix('qr')->group(function () {
         Route::get('/current', [QRController::class, 'current']);
         Route::post('/validate', [QRController::class, 'validate']);
     });
 
-    // Asistencias
+    // ========== ASISTENCIAS ==========
     Route::prefix('attendances')->group(function () {
         Route::get('/', [AttendanceController::class, 'index']);
         Route::post('/', [AttendanceController::class, 'store']); // Marcar asistencia
@@ -43,7 +42,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/{id}/validate', [AttendanceController::class, 'validate']);
     });
 
-    // Tareas
+    // ========== TAREAS ==========
     Route::prefix('tasks')->group(function () {
         Route::get('/', [TaskController::class, 'index']);
         Route::post('/', [TaskController::class, 'store']);
@@ -53,7 +52,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{id}', [TaskController::class, 'destroy']);
     });
 
-    // Justificaciones
+    // ========== JUSTIFICACIONES ==========
     Route::prefix('justifications')->group(function () {
         Route::get('/', [JustificationController::class, 'index']);
         Route::post('/', [JustificationController::class, 'store']);
@@ -61,7 +60,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/{id}/review', [JustificationController::class, 'review']);
     });
 
-    // Usuarios (Solo admin y staff)
+    // ========== USUARIOS (Solo admin y staff) ==========
     Route::prefix('users')->group(function () {
         Route::get('/', [UserController::class, 'index']);
         Route::post('/', [UserController::class, 'store']);
@@ -71,12 +70,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{id}', [UserController::class, 'destroy']);
     });
 
-    // Chat - Rutas mejoradas y ampliadas
+    // ========== CHAT ==========
     Route::prefix('chats')->group(function () {
-        // Listar todos los chats del usuario
+        // Listar chats del usuario
         Route::get('/', [ChatController::class, 'index']);
         
-        // Buscar usuarios para crear chat privado
+        // Buscar usuarios para chat privado
         Route::get('/search-users', [ChatController::class, 'searchUsers']);
         
         // Listar chats públicos disponibles

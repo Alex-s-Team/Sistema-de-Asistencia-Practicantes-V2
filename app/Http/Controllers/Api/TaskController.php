@@ -1,6 +1,5 @@
 <?php
 
-// app/Http/Controllers/Api/TaskController.php
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
@@ -28,9 +27,19 @@ class TaskController extends Controller
 
             $tasks = $query->orderBy('created_at', 'desc')->get();
 
-            return response()->json($tasks);
+            // Agrupar por estado
+            $grouped = [
+                'pending' => $tasks->where('status', 'pending')->values(),
+                'in_progress' => $tasks->where('status', 'in_progress')->values(),
+                'completed' => $tasks->where('status', 'completed')->values(),
+            ];
+
+            return response()->json($grouped);
         } catch (\Exception $e) {
-            Log::error('Error in TaskController@index:', ['message' => $e->getMessage()]);
+            Log::error('Error in TaskController@index:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'message' => 'Error al obtener tareas',
                 'error' => $e->getMessage()
@@ -50,9 +59,19 @@ class TaskController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->get();
 
-            return response()->json($tasks);
+            // Agrupar por estado
+            $grouped = [
+                'pending' => $tasks->where('status', 'pending')->values(),
+                'in_progress' => $tasks->where('status', 'in_progress')->values(),
+                'completed' => $tasks->where('status', 'completed')->values(),
+            ];
+
+            return response()->json($grouped);
         } catch (\Exception $e) {
-            Log::error('Error in TaskController@myTasks:', ['message' => $e->getMessage()]);
+            Log::error('Error in TaskController@myTasks:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'message' => 'Error al obtener mis tareas',
                 'error' => $e->getMessage()
@@ -65,14 +84,12 @@ class TaskController extends Controller
         try {
             $user = $request->user();
 
-            // Verificar permisos
             if (!$user->canManageUsers()) {
                 return response()->json([
                     'message' => 'No tienes permisos para crear tareas',
                 ], 403);
             }
 
-            // Validación
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
                 'description' => 'nullable|string',
@@ -82,14 +99,10 @@ class TaskController extends Controller
                 'due_date' => 'required|date|after_or_equal:start_date',
                 'assigned_users' => 'required|array|min:1',
                 'assigned_users.*' => 'required|integer|exists:users,id',
-            ], [
-                'assigned_users.required' => 'Debes asignar al menos un usuario',
-                'assigned_users.*.exists' => 'Uno o más usuarios seleccionados no existen',
             ]);
 
             DB::beginTransaction();
 
-            // Crear tarea
             $task = Task::create([
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
@@ -100,12 +113,10 @@ class TaskController extends Controller
                 'created_by' => $user->id,
             ]);
 
-            // Asignar usuarios
             $task->assignedUsers()->attach($validated['assigned_users']);
 
             DB::commit();
 
-            // Recargar relaciones
             $task->load(['assignedUsers', 'creator']);
 
             return response()->json([
@@ -114,6 +125,7 @@ class TaskController extends Controller
             ], 201);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
             return response()->json([
                 'message' => 'Error de validación',
                 'errors' => $e->errors(),
@@ -150,7 +162,6 @@ class TaskController extends Controller
             $user = $request->user();
             $task = Task::findOrFail($id);
 
-            // Verificar permisos
             if (!$user->canManageUsers() && $task->created_by !== $user->id) {
                 return response()->json([
                     'message' => 'No tienes permisos para editar esta tarea',
@@ -170,19 +181,16 @@ class TaskController extends Controller
 
             DB::beginTransaction();
 
-            // Actualizar tarea
             $task->update(array_filter($validated, function($key) {
                 return $key !== 'assigned_users';
             }, ARRAY_FILTER_USE_KEY));
 
-            // Actualizar usuarios asignados si se proporcionaron
             if (isset($validated['assigned_users'])) {
                 $task->assignedUsers()->sync($validated['assigned_users']);
             }
 
             DB::commit();
 
-            // Recargar relaciones
             $task->load(['assignedUsers', 'creator']);
 
             return response()->json([
@@ -192,7 +200,10 @@ class TaskController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error in TaskController@update:', ['message' => $e->getMessage()]);
+            Log::error('Error in TaskController@update:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'message' => 'Error al actualizar tarea',
                 'error' => $e->getMessage(),
@@ -206,7 +217,6 @@ class TaskController extends Controller
             $user = request()->user();
             $task = Task::findOrFail($id);
 
-            // Solo el creador o admin/staff pueden eliminar
             if (!$user->canManageUsers() && $task->created_by !== $user->id) {
                 return response()->json([
                     'message' => 'No tienes permisos para eliminar esta tarea',
@@ -219,7 +229,9 @@ class TaskController extends Controller
                 'message' => 'Tarea eliminada exitosamente',
             ]);
         } catch (\Exception $e) {
-            Log::error('Error in TaskController@destroy:', ['message' => $e->getMessage()]);
+            Log::error('Error in TaskController@destroy:', [
+                'message' => $e->getMessage()
+            ]);
             return response()->json([
                 'message' => 'Error al eliminar tarea',
             ], 500);

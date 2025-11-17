@@ -1,73 +1,96 @@
 <?php
 
-// app/Services/QRService.php
 namespace App\Services;
 
 use App\Models\QRToken;
 use Illuminate\Support\Str;
+use Carbon\Carbon;
 
 class QRService
 {
-    protected $expirationSeconds;
-
-    public function __construct()
+    /**
+     * Obtener o generar el token QR actual
+     */
+    public function getCurrentToken()
     {
-        $this->expirationSeconds = config('attendance.qr_refresh_seconds', 30);
+        // Buscar token válido existente
+        $token = QRToken::where('expires_at', '>', now())
+            ->where('is_used', false)
+            ->first();
+
+        // Si no existe o está por expirar (menos de 5 segundos), generar nuevo
+        if (!$token || $token->expires_at->diffInSeconds(now()) < 5) {
+            $token = $this->generateNewToken();
+        }
+
+        return $token;
     }
 
-    public function generateToken()
+    /**
+     * Generar un nuevo token QR
+     */
+    public function generateNewToken()
     {
-        // Limpiar tokens expirados
-        $this->cleanExpiredTokens();
+        // Invalidar tokens anteriores
+        QRToken::where('expires_at', '>', now())
+            ->update(['is_used' => true]);
 
-        $token = Str::random(64);
+        // Generar nuevo token único
+        $tokenString = Str::random(32) . '-' . time();
+        
+        // Crear URL completa para el QR
+        $qrUrl = config('app.url') . '/mark-attendance?token=' . $tokenString;
 
-        $qrToken = QRToken::create([
-            'token' => $token,
-            'expires_at' => now()->addSeconds($this->expirationSeconds),
+        // Crear registro en BD
+        $token = QRToken::create([
+            'token' => $tokenString,
+            'qr_url' => $qrUrl,
+            'expires_at' => now()->addSeconds(config('attendance.qr_refresh_seconds', 30)),
             'is_used' => false,
         ]);
 
-        return $qrToken;
+        return $token;
     }
 
-    public function getCurrentToken()
+    /**
+     * Validar un token QR
+     */
+    public function validateToken($tokenString)
     {
-        // Buscar un token válido existente
-        $currentToken = QRToken::where('is_used', false)
-            ->where('expires_at', '>', now())
-            ->latest()
+        $token = QRToken::where('token', $tokenString)
+            ->where('is_used', false)
             ->first();
 
-        // Si no existe o está por expirar (menos de 5 segundos), generar uno nuevo
-        if (!$currentToken || $currentToken->expires_at->diffInSeconds(now()) < 5) {
-            $currentToken = $this->generateToken();
+        if (!$token) {
+            return [
+                'valid' => false,
+                'message' => 'Token no válido',
+            ];
         }
 
-        return $currentToken;
+        if ($token->expires_at < now()) {
+            return [
+                'valid' => false,
+                'message' => 'El código QR ha expirado. Solicita uno nuevo.',
+            ];
+        }
+
+        // Marcar como usado
+        $token->update(['is_used' => true]);
+
+        return [
+            'valid' => true,
+            'message' => 'Token válido',
+            'token' => $token,
+        ];
     }
 
-    public function validateToken($token)
+    /**
+     * Limpiar tokens expirados (ejecutar en cron job)
+     */
+    public function cleanExpiredTokens()
     {
-        $qrToken = QRToken::where('token', $token)->first();
-
-        if (!$qrToken) {
-            return ['valid' => false, 'message' => 'Token inválido'];
-        }
-
-        if ($qrToken->is_used) {
-            return ['valid' => false, 'message' => 'Token ya utilizado'];
-        }
-
-        if ($qrToken->isExpired()) {
-            return ['valid' => false, 'message' => 'Token expirado'];
-        }
-
-        return ['valid' => true, 'token' => $qrToken];
-    }
-
-    protected function cleanExpiredTokens()
-    {
-        QRToken::where('expires_at', '<', now()->subHour())->delete();
+        QRToken::where('expires_at', '<', now()->subHour())
+            ->delete();
     }
 }

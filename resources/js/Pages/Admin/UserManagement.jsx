@@ -1,6 +1,5 @@
+
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../Context/AuthContext';
-import { userService } from '../../Services/userService';
 import { Card } from '../../Components/Common/Card';
 import { Button } from '../../Components/Common/Button';
 import { Input } from '../../Components/Common/Input';
@@ -9,6 +8,8 @@ import { Badge } from '../../Components/Common/Badge';
 import { Modal } from '../../Components/Common/Modal';
 import { LoadingSpinner } from '../../Components/Common/LoadingSpinner';
 import { Alert } from '../../Components/Common/Alert';
+import { userService } from '../../Services/userService';
+import { useRealTimeSync } from '../../Hooks/useRealTimeSync';
 import {
   PlusIcon,
   PencilIcon,
@@ -16,10 +17,8 @@ import {
   MagnifyingGlassIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline';
-import { formatDate } from '../../Utils/helpers';
 
 const UserManagement = () => {
-  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,13 +27,11 @@ const UserManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   
-  // Modal states
   const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState('create'); // 'create' or 'edit'
+  const [modalMode, setModalMode] = useState('create');
   const [selectedUser, setSelectedUser] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
-  // Form state
   const [formData, setFormData] = useState({
     name: '',
     dni: '',
@@ -57,6 +54,30 @@ const UserManagement = () => {
     exit_time: '13:00',
   });
 
+  // 🔥 SINCRONIZACIÓN EN TIEMPO REAL
+  useRealTimeSync('user', (event) => {
+    console.log('User update received:', event);
+    
+    if (event.action === 'created') {
+      // Agregar nuevo usuario a la lista
+      setUsers(prev => [...prev, event.data]);
+      setSuccess('Nuevo usuario agregado al sistema');
+      setTimeout(() => setSuccess(''), 3000);
+    } else if (event.action === 'updated') {
+      // Actualizar usuario existente
+      setUsers(prev => prev.map(u => 
+        u.id === event.data.id ? event.data : u
+      ));
+      setSuccess('Un usuario fue actualizado');
+      setTimeout(() => setSuccess(''), 3000);
+    } else if (event.action === 'deleted') {
+      // Remover usuario de la lista
+      setUsers(prev => prev.filter(u => u.id !== event.data.id));
+      setSuccess('Un usuario fue eliminado');
+      setTimeout(() => setSuccess(''), 3000);
+    }
+  });
+
   useEffect(() => {
     loadUsers();
   }, []);
@@ -70,18 +91,13 @@ const UserManagement = () => {
       setLoading(true);
       setError('');
       
-      // La respuesta ya es un array directamente
       const usersData = await userService.getUsers();
-      
-      console.log('Users loaded:', usersData);
-      
-      // Validar que sea un array
       const usersList = Array.isArray(usersData) ? usersData : [];
       setUsers(usersList);
       setFilteredUsers(usersList);
     } catch (err) {
       console.error('Error loading users:', err);
-      setError('Error al cargar usuarios: ' + (err.response?.data?.message || err.message));
+      setError('Error al cargar usuarios');
     } finally {
       setLoading(false);
     }
@@ -90,7 +106,6 @@ const UserManagement = () => {
   const filterUsers = () => {
     let filtered = [...users];
 
-    // Filtrar por búsqueda
     if (searchTerm) {
       filtered = filtered.filter(user =>
         user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -99,7 +114,6 @@ const UserManagement = () => {
       );
     }
 
-    // Filtrar por rol
     if (roleFilter !== 'all') {
       filtered = filtered.filter(user => user.role === roleFilter);
     }
@@ -115,7 +129,7 @@ const UserManagement = () => {
         name: user.name || '',
         dni: user.dni || '',
         email: user.email || '',
-        password: '', // No prellenar password
+        password: '',
         role: user.role || 'intern',
         gender: user.gender || 'masculino',
         birth_date: user.birth_date || '',
@@ -183,7 +197,6 @@ const UserManagement = () => {
         await userService.createUser(formData);
         setSuccess('Usuario creado exitosamente');
       } else {
-        // En modo edición, no enviar password si está vacío
         const updateData = { ...formData };
         if (!updateData.password) {
           delete updateData.password;
@@ -193,9 +206,8 @@ const UserManagement = () => {
       }
       
       handleCloseModal();
-      loadUsers();
+      // No necesitamos recargar, el broadcasting lo hará
       
-      // Limpiar mensaje de éxito después de 3 segundos
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Error saving user:', err);
@@ -211,7 +223,7 @@ const UserManagement = () => {
       setSuccess('Usuario desactivado exitosamente');
       setShowDeleteConfirm(false);
       setSelectedUser(null);
-      loadUsers();
+      // No necesitamos recargar, el broadcasting lo hará
       
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -239,12 +251,12 @@ const UserManagement = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Gestión de Usuarios</h1>
           <p className="mt-2 text-gray-600">
             Administra usuarios del sistema - {filteredUsers.length} usuario(s) encontrado(s)
+            {users.length !== filteredUsers.length && ` de ${users.length} total`}
           </p>
         </div>
         <Button
@@ -257,11 +269,9 @@ const UserManagement = () => {
         </Button>
       </div>
 
-      {/* Alerts */}
       {error && <Alert type="error" message={error} onClose={() => setError('')} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess('')} />}
 
-      {/* Filters */}
       <Card>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2">
@@ -285,7 +295,6 @@ const UserManagement = () => {
         </div>
       </Card>
 
-      {/* Users List */}
       <Card>
         {filteredUsers.length === 0 ? (
           <div className="text-center py-12">
@@ -329,7 +338,7 @@ const UserManagement = () => {
                 {filteredUsers.map((user) => {
                   const roleBadge = getRoleBadge(user.role);
                   return (
-                    <tr key={user.id} className="hover:bg-gray-50">
+                    <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center">
@@ -374,19 +383,16 @@ const UserManagement = () => {
                           >
                             <PencilIcon className="h-4 w-4" />
                           </Button>
-                          {/* 👇 CAMBIO: Comparación directa en lugar de método */}
-                          {currentUser?.role === 'admin' && user.id !== currentUser.id && (
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedUser(user);
-                                setShowDeleteConfirm(true);
-                              }}
-                            >
-                              <TrashIcon className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedUser(user);
+                              setShowDeleteConfirm(true);
+                            }}
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </Button>
                         </div>
                       </td>
                     </tr>

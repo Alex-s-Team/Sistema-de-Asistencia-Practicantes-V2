@@ -1,12 +1,11 @@
 <?php
 
-// app/Http/Controllers/Api/QRController.php
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\QRService;
 use Illuminate\Http\Request;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use Illuminate\Support\Facades\Log;
 
 class QRController extends Controller
 {
@@ -19,40 +18,54 @@ class QRController extends Controller
 
     public function current(Request $request)
     {
-        $user = $request->user();
+        try {
+            $user = $request->user();
 
-        // Solo admin y staff pueden generar QR
-        if (!$user->canManageUsers()) {
+            // Solo admin y staff pueden generar QR
+            if (!$user->canManageUsers()) {
+                return response()->json([
+                    'message' => 'No tienes permisos para generar códigos QR',
+                ], 403);
+            }
+
+            $qrToken = $this->qrService->getCurrentToken();
+
             return response()->json([
-                'message' => 'No tienes permisos para generar códigos QR',
-            ], 403);
+                'token' => $qrToken->token,
+                'qr_url' => $qrToken->qr_url,
+                'expires_at' => $qrToken->expires_at->toISOString(),
+                'seconds_remaining' => max(0, $qrToken->expires_at->diffInSeconds(now())),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error in QRController@current:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Error al generar código QR',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        $qrToken = $this->qrService->getCurrentToken();
-
-        // Generar imagen QR en base64
-        $qrImage = base64_encode(
-            QrCode::format('png')
-                ->size(300)
-                ->generate($qrToken->token)
-        );
-
-        return response()->json([
-            'token' => $qrToken->token,
-            'expires_at' => $qrToken->expires_at,
-            'seconds_remaining' => $qrToken->expires_at->diffInSeconds(now()),
-            'qr_image' => 'data:image/png;base64,' . $qrImage,
-        ]);
     }
 
     public function validate(Request $request)
     {
-        $request->validate([
-            'token' => 'required|string',
-        ]);
+        try {
+            $request->validate([
+                'token' => 'required|string',
+            ]);
 
-        $result = $this->qrService->validateToken($request->token);
+            $result = $this->qrService->validateToken($request->token);
 
-        return response()->json($result);
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Log::error('Error in QRController@validate:', [
+                'message' => $e->getMessage()
+            ]);
+            return response()->json([
+                'message' => 'Error al validar token',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }

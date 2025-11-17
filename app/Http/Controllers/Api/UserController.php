@@ -1,10 +1,11 @@
 <?php
-// app/Http/Controllers/Api/UserController.php
+
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Device;
+use App\Events\DataUpdated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +32,6 @@ class UserController extends Controller
 
             $users = $query->orderBy('name')->get();
 
-            // 👇 IMPORTANTE: Devolver directamente el array, no envuelto en 'data'
             return response()->json($users);
         } catch (\Exception $e) {
             Log::error('Error in UserController@index:', [
@@ -54,12 +54,6 @@ class UserController extends Controller
                 ->orderBy('name')
                 ->get();
 
-            Log::info('Interns request:', [
-                'count' => $interns->count(),
-                'data' => $interns->toArray()
-            ]);
-
-            // 👇 IMPORTANTE: Devolver directamente el array
             return response()->json($interns);
         } catch (\Exception $e) {
             Log::error('Error in UserController@interns:', [
@@ -138,7 +132,6 @@ class UserController extends Controller
                 'is_active' => true,
             ]);
 
-            // Crear dispositivos si se proporcionaron
             if (isset($validated['devices'])) {
                 foreach ($validated['devices'] as $device) {
                     Device::create([
@@ -151,6 +144,9 @@ class UserController extends Controller
             }
 
             DB::commit();
+
+            // 🔥 BROADCAST: Notificar a todos que se creó un usuario
+            broadcast(new DataUpdated('user', 'created', $newUser->load('devices')))->toOthers();
 
             return response()->json([
                 'message' => 'Usuario creado exitosamente',
@@ -220,6 +216,9 @@ class UserController extends Controller
 
             $user->update($validated);
 
+            // 🔥 BROADCAST: Notificar actualización
+            broadcast(new DataUpdated('user', 'updated', $user->load('devices')))->toOthers();
+
             return response()->json([
                 'message' => 'Usuario actualizado exitosamente',
                 'user' => $user,
@@ -244,9 +243,10 @@ class UserController extends Controller
             }
 
             $user = User::findOrFail($id);
-
-            // Soft delete
             $user->update(['is_active' => false]);
+
+            // 🔥 BROADCAST: Notificar eliminación
+            broadcast(new DataUpdated('user', 'deleted', ['id' => $user->id]))->toOthers();
 
             return response()->json([
                 'message' => 'Usuario desactivado exitosamente',

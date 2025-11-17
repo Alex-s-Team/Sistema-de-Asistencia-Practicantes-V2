@@ -8,11 +8,14 @@ import {
   ClipboardDocumentListIcon,
   UserGroupIcon,
   ChatBubbleLeftRightIcon,
+  DocumentTextIcon,
+  UserCircleIcon,
+  ChartBarIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
 
 const Sidebar = ({ isOpen, onClose }) => {
-  const { user, isAdmin, isStaff, isIntern } = useAuth();
+  const { user } = useAuth();
 
   const navigation = {
     admin: [
@@ -20,19 +23,26 @@ const Sidebar = ({ isOpen, onClose }) => {
       { name: 'Validar Asistencias', href: '/validate-attendance', icon: CheckCircleIcon },
       { name: 'Gestión de Usuarios', href: '/users', icon: UserGroupIcon },
       { name: 'Gestión de Tareas', href: '/tasks', icon: ClipboardDocumentListIcon },
+      { name: 'Reportes', href: '/reports', icon: ChartBarIcon },
+      { name: 'Justificaciones', href: '/justifications', icon: DocumentTextIcon },
       { name: 'Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
+      { name: 'Mi Perfil', href: '/profile', icon: UserCircleIcon },
     ],
     staff: [
       { name: 'Dashboard', href: '/', icon: HomeIcon },
       { name: 'Gestión de Usuarios', href: '/users', icon: UserGroupIcon },
       { name: 'Gestión de Tareas', href: '/tasks', icon: ClipboardDocumentListIcon },
+      { name: 'Justificaciones', href: '/justifications', icon: DocumentTextIcon },
       { name: 'Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
+      { name: 'Mi Perfil', href: '/profile', icon: UserCircleIcon },
     ],
     intern: [
       { name: 'Dashboard', href: '/', icon: HomeIcon },
       { name: 'Marcar Asistencia', href: '/mark-attendance', icon: ClockIcon },
       { name: 'Mis Tareas', href: '/my-tasks', icon: ClipboardDocumentListIcon },
+      { name: 'Justificaciones', href: '/justifications', icon: DocumentTextIcon },
       { name: 'Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
+      { name: 'Mi Perfil', href: '/profile', icon: UserCircleIcon },
     ],
   };
 
@@ -50,7 +60,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-white border-r border-gray-200 z-40 transition-transform duration-300 ${
+        className={`fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-white border-r border-gray-200 z-40 transition-transform duration-300 overflow-y-auto ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}
       >
@@ -87,11 +97,14 @@ const Sidebar = ({ isOpen, onClose }) => {
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-gray-50">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-primary-500 text-white flex items-center justify-center font-bold">
-              {user?.name.charAt(0)}
+              {user?.name?.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">{user?.name}</p>
-              <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
+              <p className="text-xs text-gray-500 capitalize">
+                {user?.role === 'admin' ? 'Administrador' :
+                 user?.role === 'staff' ? 'Personal' : 'Practicante'}
+              </p>
             </div>
           </div>
         </div>
@@ -101,4 +114,3 @@ const Sidebar = ({ isOpen, onClose }) => {
 };
 
 export default Sidebar;
-

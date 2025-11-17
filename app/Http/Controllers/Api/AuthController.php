@@ -133,17 +133,20 @@ class AuthController extends Controller
             $user = $request->user();
 
             $validated = $request->validate([
-                'phone' => 'nullable|string|max:20',
+                'name' => 'sometimes|string|max:255',
+                'email' => 'sometimes|nullable|email|unique:users,email,' . $user->id,
+                'phone' => 'nullable|string',
                 'address' => 'nullable|string',
                 'district' => 'nullable|string',
-                'emergency_contact' => 'nullable|string|max:20',
+                'city' => 'nullable|string',
+                'emergency_contact' => 'nullable|string',
             ]);
 
             $user->update($validated);
 
             return response()->json([
                 'message' => 'Perfil actualizado correctamente',
-                'user' => $user,
+                'data' => $user,
             ]);
         } catch (\Exception $e) {
             Log::error('Error updating profile:', ['message' => $e->getMessage()]);
@@ -156,27 +159,31 @@ class AuthController extends Controller
     public function changePassword(Request $request)
     {
         try {
-            $validated = $request->validate([
-                'current_password' => 'required',
-                'new_password' => 'required|min:8|confirmed',
-            ]);
-
             $user = $request->user();
 
+            $validated = $request->validate([
+                'current_password' => 'required|string',
+                'new_password' => 'required|string|min:8|confirmed',
+            ]);
+
             if (!Hash::check($validated['current_password'], $user->password)) {
-                throw ValidationException::withMessages([
-                    'current_password' => ['La contraseña actual es incorrecta.'],
-                ]);
+                return response()->json([
+                    'message' => 'La contraseña actual es incorrecta',
+                ], 422);
             }
 
             $user->update([
                 'password' => Hash::make($validated['new_password']),
             ]);
 
-            return response()->json(['message' => 'Contraseña actualizada correctamente']);
+            return response()->json([
+                'message' => 'Contraseña actualizada correctamente',
+            ]);
         } catch (\Exception $e) {
             Log::error('Error changing password:', ['message' => $e->getMessage()]);
-            throw $e;
-        }
+            return response()->json([
+                'message' => 'Error al cambiar contraseña',
+            ], 500);
+            }
     }
 }

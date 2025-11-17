@@ -6,14 +6,25 @@ import { ChatProvider } from './Context/ChatContext';
 
 // Pages
 import Login from './Pages/Auth/Login';
+
+// Admin Pages
 import AdminDashboard from './Pages/Admin/Dashboard';
-import StaffDashboard from './Pages/Staff/Dashboard';
-import InternDashboard from './Pages/Intern/Dashboard';
-import MarkAttendance from './Pages/Intern/MarkAttendance';
 import ValidateAttendance from './Pages/Admin/ValidateAttendance';
 import UserManagement from './Pages/Admin/UserManagement';
+import Reports from './Pages/Admin/Reports';
+
+// Staff Pages
+import StaffDashboard from './Pages/Staff/Dashboard';
 import TaskManagement from './Pages/Staff/TaskManagement';
+
+// Intern Pages
+import InternDashboard from './Pages/Intern/Dashboard';
+import MarkAttendance from './Pages/Intern/MarkAttendance';
 import MyTasks from './Pages/Intern/MyTasks';
+
+// Common Pages (para todos los roles)
+import Profile from './Pages/Common/Profile';
+import Justifications from './Pages/Common/Justifications';
 import ChatPage from './Pages/Chat/ChatPage';
 
 // Layout
@@ -63,7 +74,7 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       >
-        {/* Admin Routes */}
+        {/* Dashboard según rol */}
         <Route
           index
           element={
@@ -77,6 +88,7 @@ const AppRoutes = () => {
           }
         />
 
+        {/* Admin Routes */}
         <Route
           path="validate-attendance"
           element={
@@ -91,6 +103,15 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute allowedRoles={['admin', 'staff']}>
               <UserManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="reports"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <Reports />
             </ProtectedRoute>
           }
         />
@@ -124,7 +145,25 @@ const AppRoutes = () => {
           }
         />
 
-        {/* Chat Route - Accesible para todos los usuarios autenticados */}
+        {/* Common Routes - Para todos los roles autenticados */}
+        <Route
+          path="profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="justifications"
+          element={
+            <ProtectedRoute>
+              <Justifications />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="chat"
           element={

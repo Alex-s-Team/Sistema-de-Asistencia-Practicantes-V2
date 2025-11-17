@@ -1,11 +1,11 @@
 <?php
 
-// app/Http/Controllers/Api/AttendanceController.php
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Services\AttendanceValidationService;
+use App\Services\QRService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -13,10 +13,12 @@ use Carbon\Carbon;
 class AttendanceController extends Controller
 {
     protected $validationService;
+    protected $qrService;
 
-    public function __construct(AttendanceValidationService $validationService)
+    public function __construct(AttendanceValidationService $validationService, QRService $qrService)
     {
         $this->validationService = $validationService;
+        $this->qrService = $qrService;
     }
 
     public function index(Request $request)
@@ -61,7 +63,6 @@ class AttendanceController extends Controller
         try {
             $user = $request->user();
 
-            // Solo admin y staff pueden ver asistencias pendientes
             if (!$user->canManageUsers()) {
                 return response()->json([
                     'message' => 'No tienes permisos',
@@ -88,7 +89,6 @@ class AttendanceController extends Controller
         try {
             $user = $request->user();
 
-            // Solo practicantes pueden marcar asistencia
             if (!$user->isIntern()) {
                 return response()->json([
                     'message' => 'Solo los practicantes pueden marcar asistencia',
@@ -103,6 +103,22 @@ class AttendanceController extends Controller
                 'remote_reason' => 'nullable|string',
             ]);
 
+            // Validar QR
+            $qrValidation = $this->qrService->validateToken($validated['qr_token']);
+            if (!$qrValidation['valid']) {
+                return response()->json([
+                    'message' => $qrValidation['message'],
+                ], 422);
+            }
+
+            // Marcar QR como usado
+            if (isset($qrValidation['token'])) {
+                $qrValidation['token']->update([
+                    'used_by' => $user->id,
+                    'used_at' => now()
+                ]);
+            }
+
             // Validar condiciones
             $ipAddress = $request->ip();
             $validation = $this->validationService->validateAttendanceConditions(
@@ -112,7 +128,7 @@ class AttendanceController extends Controller
                 $ipAddress
             );
 
-            // Verificar si ya tiene registro hoy
+            // Verificar registro del día
             $today = Carbon::today();
             $existingAttendance = Attendance::where('user_id', $user->id)
                 ->whereDate('date', $today)
@@ -128,31 +144,25 @@ class AttendanceController extends Controller
                 $entryTime = now()->format('H:i:s');
                 $hasDelay = $user->entry_time && $entryTime > $user->entry_time;
 
+                $attendanceData = [
+                    'entry_time' => $entryTime,
+                    'entry_latitude' => $validated['latitude'],
+                    'entry_longitude' => $validated['longitude'],
+                    'entry_ip' => $ipAddress,
+                    'has_delay' => $hasDelay,
+                    'is_remote_entry' => !$validation['is_valid_network'] || !$validation['is_valid_location'],
+                    'remote_entry_reason' => $validated['remote_reason'] ?? null,
+                    'status' => $validation['requires_approval'] ? 'pending' : 'approved',
+                ];
+
                 if ($existingAttendance) {
-                    $existingAttendance->update([
-                        'entry_time' => $entryTime,
-                        'entry_latitude' => $validated['latitude'],
-                        'entry_longitude' => $validated['longitude'],
-                        'entry_ip' => $ipAddress,
-                        'has_delay' => $hasDelay,
-                        'is_remote_entry' => !$validation['is_valid_network'] || !$validation['is_valid_location'],
-                        'remote_entry_reason' => $validated['remote_reason'] ?? null,
-                        'status' => $validation['requires_approval'] ? 'pending' : 'approved',
-                    ]);
+                    $existingAttendance->update($attendanceData);
                     $attendance = $existingAttendance;
                 } else {
-                    $attendance = Attendance::create([
+                    $attendance = Attendance::create(array_merge([
                         'user_id' => $user->id,
                         'date' => $today,
-                        'entry_time' => $entryTime,
-                        'entry_latitude' => $validated['latitude'],
-                        'entry_longitude' => $validated['longitude'],
-                        'entry_ip' => $ipAddress,
-                        'has_delay' => $hasDelay,
-                        'is_remote_entry' => !$validation['is_valid_network'] || !$validation['is_valid_location'],
-                        'remote_entry_reason' => $validated['remote_reason'] ?? null,
-                        'status' => $validation['requires_approval'] ? 'pending' : 'approved',
-                    ]);
+                    ], $attendanceData));
                 }
 
                 return response()->json([
@@ -161,6 +171,7 @@ class AttendanceController extends Controller
                         : 'Entrada registrada exitosamente',
                     'attendance' => $attendance,
                     'validation' => $validation,
+                    'requires_remote_reason' => !$validation['is_valid_network'] && !$validated['remote_reason'],
                 ], 201);
 
             } else { // exit
@@ -214,7 +225,6 @@ class AttendanceController extends Controller
         try {
             $user = $request->user();
 
-            // Solo admin puede validar
             if (!$user->canValidateAttendance()) {
                 return response()->json([
                     'message' => 'No tienes permisos para validar asistencias',
@@ -257,21 +267,53 @@ class AttendanceController extends Controller
             $year = $request->input('year', now()->year);
 
             if ($user->isIntern()) {
-                $stats = $user->getAttendanceStats($month, $year);
+                // Estadísticas para practicante
+                $totalDays = Attendance::where('user_id', $user->id)
+                    ->whereMonth('date', $month)
+                    ->whereYear('date', $year)
+                    ->count();
+
+                $presentDays = Attendance::where('user_id', $user->id)
+                    ->whereMonth('date', $month)
+                    ->whereYear('date', $year)
+                    ->whereNotNull('entry_time')
+                    ->count();
+
+                $delays = Attendance::where('user_id', $user->id)
+                    ->whereMonth('date', $month)
+                    ->whereYear('date', $year)
+                    ->where('has_delay', true)
+                    ->count();
+
+                $stats = [
+                    'total_days' => $totalDays,
+                    'present_days' => $presentDays,
+                    'absent_days' => $totalDays > 0 ? $totalDays - $presentDays : 0,
+                    'delays' => $delays,
+                    'attendance_rate' => $totalDays > 0 ? round(($presentDays / $totalDays) * 100, 2) : 0,
+                ];
             } else {
-                // Stats generales para admin/staff
+                // Estadísticas generales para admin/staff
                 $stats = [
                     'total_users' => \App\Models\User::where('role', 'intern')->where('is_active', true)->count(),
                     'total_attendances' => Attendance::whereMonth('date', $month)->whereYear('date', $year)->count(),
                     'pending_validations' => Attendance::where('status', 'pending')->count(),
+                    'approved_attendances' => Attendance::where('status', 'approved')
+                        ->whereMonth('date', $month)
+                        ->whereYear('date', $year)
+                        ->count(),
                 ];
             }
 
             return response()->json($stats);
         } catch (\Exception $e) {
-            Log::error('Error in AttendanceController@stats:', ['message' => $e->getMessage()]);
+            Log::error('Error in AttendanceController@stats:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'message' => 'Error al obtener estadísticas',
+                'error' => $e->getMessage()
             ], 500);
         }
     }

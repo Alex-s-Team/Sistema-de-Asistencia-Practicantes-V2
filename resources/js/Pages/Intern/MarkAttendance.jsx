@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card } from '../../Components/Common/Card';
 import { Button } from '../../Components/Common/Button';
 import { Input } from '../../Components/Common/Input';
@@ -15,16 +15,21 @@ import {
   QrCodeIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  ClockIcon
+  ClockIcon,
+  LinkIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 
 const MarkAttendance = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tokenFromUrl = searchParams.get('token');
+  
   const { location, error: locationError, loading: locationLoading, getCurrentPosition } = useGeolocation();
 
   const [qrData, setQrData] = useState(null);
   const [qrLoading, setQrLoading] = useState(false);
-  const [attendanceType, setAttendanceType] = useState(null); // 'entry' or 'exit'
+  const [attendanceType, setAttendanceType] = useState(null);
   const [showQR, setShowQR] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -33,7 +38,13 @@ const MarkAttendance = () => {
   const [remoteReason, setRemoteReason] = useState('');
   const [timeRemaining, setTimeRemaining] = useState(30);
 
-  // Obtener QR cada 30 segundos
+  // Si viene token en URL, auto-abrir modal
+  useEffect(() => {
+    if (tokenFromUrl) {
+      handleStartAttendance('entry');
+    }
+  }, [tokenFromUrl]);
+
   useEffect(() => {
     if (showQR) {
       loadQRCode();
@@ -42,7 +53,6 @@ const MarkAttendance = () => {
     }
   }, [showQR]);
 
-  // Countdown para renovación de QR
   useEffect(() => {
     if (showQR && qrData) {
       const interval = setInterval(() => {
@@ -50,6 +60,10 @@ const MarkAttendance = () => {
         const expiresAt = new Date(qrData.expires_at);
         const diff = Math.floor((expiresAt - now) / 1000);
         setTimeRemaining(diff > 0 ? diff : 0);
+        
+        if (diff <= 0) {
+          loadQRCode();
+        }
       }, 1000);
       return () => clearInterval(interval);
     }
@@ -76,6 +90,14 @@ const MarkAttendance = () => {
     setShowQR(true);
   };
 
+  const handleCopyLink = () => {
+    if (qrData?.qr_url) {
+      navigator.clipboard.writeText(qrData.qr_url);
+      setSuccess('Link copiado al portapapeles');
+      setTimeout(() => setSuccess(''), 2000);
+    }
+  };
+
   const handleSubmitAttendance = async () => {
     if (!location) {
       setError('Debes permitir el acceso a tu ubicación');
@@ -87,20 +109,12 @@ const MarkAttendance = () => {
       return;
     }
 
-    // Verificar si está en red privada (simulación - en producción el backend lo verificará)
-    const isInNetwork = false; // El backend determinará esto
-
-    if (!isInNetwork && !remoteReason) {
-      setShowRemoteModal(true);
-      return;
-    }
-
     try {
       setSubmitting(true);
       setError('');
 
       const response = await attendanceService.markAttendance({
-        qr_token: qrData.token,
+        qr_token: tokenFromUrl || qrData.token,
         type: attendanceType,
         latitude: location.latitude,
         longitude: location.longitude,
@@ -110,13 +124,18 @@ const MarkAttendance = () => {
       setSuccess(response.message);
       setShowQR(false);
 
-      // Redirigir al dashboard después de 2 segundos
       setTimeout(() => {
         navigate('/');
       }, 2000);
 
     } catch (err) {
-      setError(err.response?.data?.message || 'Error al registrar asistencia');
+      const errorMsg = err.response?.data?.message || 'Error al registrar asistencia';
+      setError(errorMsg);
+      
+      // Si requiere justificación remota
+      if (err.response?.data?.requires_remote_reason && !remoteReason) {
+        setShowRemoteModal(true);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -133,7 +152,6 @@ const MarkAttendance = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
       <Card>
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -145,12 +163,10 @@ const MarkAttendance = () => {
         </div>
       </Card>
 
-      {/* Error/Success Messages */}
       {error && <Alert type="error" message={error} onClose={() => setError('')} />}
       {success && <Alert type="success" message={success} />}
 
-      {/* Action Buttons */}
-      {!showQR && (
+      {!showQR && !tokenFromUrl && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="text-center hover:shadow-lg transition-shadow">
             <ClockIcon className="h-20 w-20 text-primary-500 mx-auto mb-4" />
@@ -190,11 +206,9 @@ const MarkAttendance = () => {
         </div>
       )}
 
-      {/* QR Scanner Section */}
       {showQR && (
         <Card>
           <div className="space-y-6">
-            {/* Location Status */}
             <div className={`p-4 rounded-lg border-2 ${
               location 
                 ? 'bg-green-50 border-green-200' 
@@ -227,7 +241,6 @@ const MarkAttendance = () => {
               </div>
             </div>
 
-            {/* QR Code Display */}
             <div className="text-center">
               <div className="inline-block p-6 bg-white rounded-lg shadow-lg">
                 {qrLoading ? (
@@ -235,7 +248,7 @@ const MarkAttendance = () => {
                 ) : qrData ? (
                   <>
                     <QRCodeSVG
-                      value={qrData.token}
+                      value={qrData.qr_url}
                       size={300}
                       level="H"
                       includeMargin
@@ -251,6 +264,31 @@ const MarkAttendance = () => {
                         />
                       </div>
                     </div>
+                    
+                    <div className="mt-4 space-y-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyLink}
+                        className="w-full"
+                      >
+                        <LinkIcon className="h-4 w-4 mr-2" />
+                        Copiar Link del QR
+                      </Button>
+                      <p className="text-xs text-gray-500">
+                        Si tu celular no escanea, copia el link
+                      </p>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={loadQRCode}
+                      className="w-full mt-2"
+                    >
+                      <ArrowPathIcon className="h-4 w-4 mr-2" />
+                      Renovar QR
+                    </Button>
                   </>
                 ) : (
                   <div className="text-gray-500">
@@ -261,18 +299,16 @@ const MarkAttendance = () => {
               </div>
             </div>
 
-            {/* Instructions */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h4 className="font-semibold text-blue-900 mb-2">Instrucciones:</h4>
               <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800">
                 <li>Asegúrate de estar en la oficina o explica el motivo si estás en otro lugar</li>
+                <li>Escanea el QR con tu celular o copia el link</li>
                 <li>El código QR se renueva cada 30 segundos por seguridad</li>
                 <li>Presiona "Confirmar {attendanceType === 'entry' ? 'Entrada' : 'Salida'}" cuando estés listo</li>
-                <li>El sistema validará tu ubicación y conexión de red automáticamente</li>
               </ol>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex gap-4">
               <Button
                 variant="outline"
@@ -300,7 +336,6 @@ const MarkAttendance = () => {
         </Card>
       )}
 
-      {/* Remote Reason Modal */}
       <Modal
         isOpen={showRemoteModal}
         onClose={() => setShowRemoteModal(false)}
@@ -315,7 +350,7 @@ const MarkAttendance = () => {
 
           <Input
             label="Motivo del registro remoto"
-            placeholder="Ej: Cita médica después del trabajo, trabajo desde casa autorizado, etc."
+            placeholder="Ej: Cita médica, trabajo desde casa autorizado, etc."
             value={remoteReason}
             onChange={(e) => setRemoteReason(e.target.value)}
             required
@@ -344,7 +379,6 @@ const MarkAttendance = () => {
         </div>
       </Modal>
 
-      {/* Info Card */}
       <Card>
         <div className="flex items-start gap-4">
           <ExclamationTriangleIcon className="h-8 w-8 text-yellow-500 flex-shrink-0" />
@@ -354,7 +388,7 @@ const MarkAttendance = () => {
               <li>• Solo puedes marcar asistencia una vez por día (entrada y salida)</li>
               <li>• Los registros fuera de la red requieren aprobación del supervisor</li>
               <li>• Si llegas tarde, el sistema calculará automáticamente el retraso</li>
-              <li>• Puedes justificar ausencias y retrasos desde el chat o formulario de justificaciones</li>
+              <li>• Puedes justificar ausencias y retrasos desde la sección de justificaciones</li>
             </ul>
           </div>
         </div>
@@ -364,5 +398,3 @@ const MarkAttendance = () => {
 };
 
 export default MarkAttendance;
-
-
