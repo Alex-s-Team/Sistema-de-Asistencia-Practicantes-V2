@@ -105,9 +105,10 @@ const ValidateAttendance = () => {
 
   const getDistanceStatus = (distance) => {
     if (!distance) return { color: 'gray', text: 'Sin datos', status: 'unknown' };
-    if (distance <= 500) {
+    const distanceNum = parseFloat(distance);
+    if (distanceNum <= 500) {
       return { color: 'green', text: 'Dentro de oficina', status: 'good' };
-    } else if (distance <= 1000) {
+    } else if (distanceNum <= 1000) {
       return { color: 'yellow', text: 'Cerca de oficina', status: 'warning' };
     } else {
       return { color: 'red', text: 'Lejos de oficina', status: 'danger' };
@@ -134,6 +135,19 @@ const ValidateAttendance = () => {
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const hour12 = hour % 12 || 12;
     return `${hour12}:${minutes} ${ampm}`;
+  };
+
+  // ✅ FUNCIÓN HELPER para convertir coordenadas a número de forma segura
+  const parseCoordinate = (coord) => {
+    if (coord === null || coord === undefined) return null;
+    const num = parseFloat(coord);
+    return isNaN(num) ? null : num;
+  };
+
+  // ✅ FUNCIÓN HELPER para formatear coordenadas
+  const formatCoordinate = (coord) => {
+    const num = parseCoordinate(coord);
+    return num !== null ? num.toFixed(6) : 'N/A';
   };
 
   if (loading) {
@@ -191,6 +205,10 @@ const ValidateAttendance = () => {
             const distanceStatus = getDistanceStatus(attendance.distance_from_office);
             const isEntry = !!attendance.entry_time;
             
+            // ✅ Parsear coordenadas de forma segura
+            const latitude = parseCoordinate(attendance.entry_latitude || attendance.exit_latitude);
+            const longitude = parseCoordinate(attendance.entry_longitude || attendance.exit_longitude);
+            
             return (
               <Card key={attendance.id} className="hover:shadow-lg transition-shadow">
                 <div className="space-y-4">
@@ -245,23 +263,22 @@ const ValidateAttendance = () => {
                       <div className="flex-1">
                         <p className="font-medium text-gray-900">Ubicación GPS</p>
                         <p className="text-xs text-gray-600 font-mono">
-                          {(attendance.entry_latitude || attendance.exit_latitude)?.toFixed(6)}, 
-                          {(attendance.entry_longitude || attendance.exit_longitude)?.toFixed(6)}
+                          {formatCoordinate(attendance.entry_latitude || attendance.exit_latitude)}, 
+                          {formatCoordinate(attendance.entry_longitude || attendance.exit_longitude)}
                         </p>
                         {attendance.distance_from_office && (
                           <p className={`text-xs font-semibold mt-1 text-${distanceStatus.color}-600`}>
-                            📍 {Math.round(attendance.distance_from_office)}m - {distanceStatus.text}
+                            📍 {Math.round(parseFloat(attendance.distance_from_office))}m - {distanceStatus.text}
                           </p>
                         )}
-                        <button
-                          onClick={() => openMapLocation(
-                            attendance.entry_latitude || attendance.exit_latitude,
-                            attendance.entry_longitude || attendance.exit_longitude
-                          )}
-                          className="text-xs text-blue-600 hover:underline mt-1"
-                        >
-                          🗺️ Ver en Google Maps →
-                        </button>
+                        {latitude !== null && longitude !== null && (
+                          <button
+                            onClick={() => openMapLocation(latitude, longitude)}
+                            className="text-xs text-blue-600 hover:underline mt-1"
+                          >
+                            🗺️ Ver en Google Maps →
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -344,8 +361,8 @@ const ValidateAttendance = () => {
                             ⚠️ Alertas de Seguridad:
                           </p>
                           <ul className="text-xs text-red-800 space-y-1">
-                            {distanceStatus.status === 'danger' && (
-                              <li>• Usuario está a {Math.round(attendance.distance_from_office)}m de la oficina (muy lejos)</li>
+                            {distanceStatus.status === 'danger' && attendance.distance_from_office && (
+                              <li>• Usuario está a {Math.round(parseFloat(attendance.distance_from_office))}m de la oficina (muy lejos)</li>
                             )}
                             {!networkValid && <li>• Registro desde red externa (no es red de oficina)</li>}
                             {!qrValid && <li>• Token QR no reconocido o inválido</li>}
@@ -423,9 +440,9 @@ const ValidateAttendance = () => {
                 <p><strong>Tipo:</strong> {selectedAttendance.entry_time ? 'ENTRADA' : 'SALIDA'}</p>
                 <p><strong>Hora Registrada:</strong> {formatTime(selectedAttendance.entry_time || selectedAttendance.exit_time)}</p>
                 <p><strong>IP:</strong> {selectedAttendance.entry_ip || selectedAttendance.exit_ip}</p>
-                <p><strong>Coordenadas:</strong> {selectedAttendance.entry_latitude || selectedAttendance.exit_latitude}, {selectedAttendance.entry_longitude || selectedAttendance.exit_longitude}</p>
+                <p><strong>Coordenadas:</strong> {formatCoordinate(selectedAttendance.entry_latitude || selectedAttendance.exit_latitude)}, {formatCoordinate(selectedAttendance.entry_longitude || selectedAttendance.exit_longitude)}</p>
                 {selectedAttendance.distance_from_office && (
-                  <p><strong>Distancia:</strong> {Math.round(selectedAttendance.distance_from_office)}m de la oficina</p>
+                  <p><strong>Distancia:</strong> {Math.round(parseFloat(selectedAttendance.distance_from_office))}m de la oficina</p>
                 )}
                 <p><strong>Token QR:</strong> {selectedAttendance.qr_token}</p>
                 {selectedAttendance.has_delay && (

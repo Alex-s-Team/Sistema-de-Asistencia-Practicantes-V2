@@ -10,9 +10,9 @@ export const useGeolocation = () => {
   // Cambia estas coordenadas cuando estés en producción
   const TESTING_MODE = true; // Cambiar a false en producción
   const DEFAULT_COORDINATES = {
-    latitude: -13.532403,  // Coordenadas de tu oficina
-    longitude: -77.0428,
-    accuracy: 100
+    latitude: -13.544636393527773,  // Coordenadas de tu oficina
+    longitude: -71.88325854817285,
+    accuracy: 500
   };
 
   const getCurrentPosition = () => {
