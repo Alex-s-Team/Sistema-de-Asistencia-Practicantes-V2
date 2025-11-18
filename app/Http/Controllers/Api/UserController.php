@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class UserController extends Controller{
+class UserController extends Controller
+{
     public function index(Request $request)
     {
         try {
@@ -23,10 +24,17 @@ class UserController extends Controller{
                 ], 403);
             }
 
-            $query = User::with(['devices'])->where('is_active', true);
+            // ✅ CAMBIO IMPORTANTE: Traer TODOS los usuarios (activos e inactivos)
+            // El filtrado se hace en el frontend
+            $query = User::with(['devices']);
 
             if ($request->has('role')) {
                 $query->where('role', $request->role);
+            }
+
+            // ✅ Permitir filtrar por estado si se especifica
+            if ($request->has('is_active')) {
+                $query->where('is_active', $request->boolean('is_active'));
             }
 
             $users = $query->orderBy('name')->get();
@@ -47,6 +55,7 @@ class UserController extends Controller{
     public function interns(Request $request)
     {
         try {
+            // Para practicantes, solo mostrar los activos
             $interns = User::where('role', 'intern')
                 ->where('is_active', true)
                 ->with(['devices'])
@@ -178,7 +187,9 @@ class UserController extends Controller{
                 $query->latest()->limit(10);
             }, 'tasks', 'justifications'])->findOrFail($id);
 
-            return response()->json($user);
+            return response()->json([
+                'data' => $user
+            ]);
         } catch (\Exception $e) {
             Log::error('Error in UserController@show:', ['message' => $e->getMessage()]);
             return response()->json([
@@ -192,7 +203,7 @@ class UserController extends Controller{
         try {
             $currentUser = $request->user();
 
-            // Permitir que los usuarios editen su propio perfil o que los admin/staff editen otros usuarios
+            // Verificar permisos
             $isOwnProfile = $currentUser->id == $id;
             
             if (!$isOwnProfile && !$currentUser->canManageUsers()) {
@@ -217,10 +228,6 @@ class UserController extends Controller{
                     'university' => 'nullable|string',
                     'semester' => 'nullable|string',
                     'position' => 'nullable|string',
-                    'start_date' => 'nullable|date',
-                    'end_date' => 'nullable|date',
-                    'entry_time' => 'nullable|date_format:H:i',
-                    'exit_time' => 'nullable|date_format:H:i',
                 ]);
             } else {
                 // Admin puede editar todo incluyendo el rol y estado
@@ -228,8 +235,10 @@ class UserController extends Controller{
                     'name' => 'sometimes|string|max:255',
                     'dni' => 'sometimes|string|size:8|regex:/^[0-9]{8}$/|unique:users,dni,' . $id,
                     'email' => 'sometimes|nullable|email|unique:users,email,' . $id,
+                    'password' => 'sometimes|string|min:8',
                     'role' => 'sometimes|in:admin,staff,intern',
                     'gender' => 'sometimes|in:masculino,femenino',
+                    'birth_date' => 'nullable|date',
                     'phone' => 'nullable|string',
                     'emergency_contact' => 'nullable|string',
                     'address' => 'nullable|string',
@@ -244,6 +253,16 @@ class UserController extends Controller{
                     'exit_time' => 'nullable|date_format:H:i',
                     'is_active' => 'sometimes|boolean',
                 ]);
+
+                // Si se proporciona una contraseña, hashearla
+                if (isset($validated['password'])) {
+                    $validated['password'] = Hash::make($validated['password']);
+                }
+
+                // Recalcular edad si se actualiza birth_date
+                if (isset($validated['birth_date'])) {
+                    $validated['age'] = now()->diffInYears($validated['birth_date']);
+                }
             }
 
             $user->update($validated);
@@ -253,12 +272,21 @@ class UserController extends Controller{
 
             return response()->json([
                 'message' => 'Usuario actualizado exitosamente',
-                'user' => $user,
+                'user' => $user->load('devices'),
             ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Error de validación',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
-            Log::error('Error in UserController@update:', ['message' => $e->getMessage()]);
+            Log::error('Error in UserController@update:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'message' => 'Error al actualizar usuario',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -270,23 +298,41 @@ class UserController extends Controller{
 
             if (!$currentUser->isAdmin()) {
                 return response()->json([
-                    'message' => 'Solo los administradores pueden eliminar usuarios',
+                    'message' => 'Solo los administradores pueden desactivar usuarios',
+                ], 403);
+            }
+
+            // No permitir que un admin se desactive a sí mismo
+            if ($currentUser->id == $id) {
+                return response()->json([
+                    'message' => 'No puedes desactivar tu propia cuenta',
                 ], 403);
             }
 
             $user = User::findOrFail($id);
+            
+            // ✅ DESACTIVAR, no eliminar
             $user->update(['is_active' => false]);
 
-            // 🔥 BROADCAST: Notificar eliminación
+            // 🔥 BROADCAST: Notificar "eliminación" (desactivación)
             broadcast(new DataUpdated('user', 'deleted', ['id' => $user->id]))->toOthers();
+
+            Log::info('Usuario desactivado', [
+                'user_id' => $id,
+                'desactivado_por' => $currentUser->id
+            ]);
 
             return response()->json([
                 'message' => 'Usuario desactivado exitosamente',
             ]);
         } catch (\Exception $e) {
-            Log::error('Error in UserController@destroy:', ['message' => $e->getMessage()]);
+            Log::error('Error in UserController@destroy:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
-                'message' => 'Error al eliminar usuario',
+                'message' => 'Error al desactivar usuario',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -316,14 +362,23 @@ class UserController extends Controller{
             // 🔥 BROADCAST: Notificar actualización
             broadcast(new DataUpdated('user', 'updated', $user))->toOthers();
 
+            Log::info('Contraseña restablecida', [
+                'user_id' => $id,
+                'restablecida_por' => $currentUser->id
+            ]);
+
             return response()->json([
                 'message' => 'Contraseña restablecida exitosamente',
-                'new_password' => $newPassword, // Solo para mostrar en la respuesta
+                'new_password' => $newPassword,
             ]);
         } catch (\Exception $e) {
-            Log::error('Error in UserController@resetPassword:', ['message' => $e->getMessage()]);
+            Log::error('Error in UserController@resetPassword:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'message' => 'Error al restablecer contraseña',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
