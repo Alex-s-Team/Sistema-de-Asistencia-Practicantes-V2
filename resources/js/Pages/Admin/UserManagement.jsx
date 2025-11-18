@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '../../Components/Common/Card';
 import { Button } from '../../Components/Common/Button';
@@ -10,15 +9,19 @@ import { LoadingSpinner } from '../../Components/Common/LoadingSpinner';
 import { Alert } from '../../Components/Common/Alert';
 import { userService } from '../../Services/userService';
 import { useRealTimeSync } from '../../Hooks/useRealTimeSync';
+import { useAuth } from '../../Context/AuthContext';
 import {
   PlusIcon,
   PencilIcon,
   TrashIcon,
   MagnifyingGlassIcon,
   UserGroupIcon,
+  EyeIcon,
+  KeyIcon,
 } from '@heroicons/react/24/outline';
 
 const UserManagement = () => {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +34,7 @@ const UserManagement = () => {
   const [modalMode, setModalMode] = useState('create');
   const [selectedUser, setSelectedUser] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -232,6 +236,26 @@ const UserManagement = () => {
     }
   };
 
+  const handleViewProfile = (user) => {
+    setSelectedUser(user);
+    setShowProfileModal(true);
+  };
+
+  const handleResetPassword = async (user) => {
+    if (!confirm(`¿Estás seguro de restablecer la contraseña de ${user.name}? La nueva contraseña será su DNI (${user.dni}).`)) {
+      return;
+    }
+
+    try {
+      await userService.resetPassword(user.id);
+      setSuccess(`Contraseña restablecida correctamente. La nueva contraseña es: ${user.dni}`);
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (err) {
+      console.error('Error resetting password:', err);
+      setError(err.response?.data?.message || 'Error al restablecer contraseña');
+    }
+  };
+
   const getRoleBadge = (role) => {
     const badges = {
       admin: { label: 'Administrador', color: 'red' },
@@ -240,6 +264,9 @@ const UserManagement = () => {
     };
     return badges[role] || badges.intern;
   };
+
+  // Verificar si el usuario actual es administrador
+  const isAdmin = currentUser?.role === 'admin';
 
   if (loading) {
     return (
@@ -337,6 +364,8 @@ const UserManagement = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredUsers.map((user) => {
                   const roleBadge = getRoleBadge(user.role);
+                  const isOwnProfile = currentUser?.id === user.id;
+                  
                   return (
                     <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -379,20 +408,43 @@ const UserManagement = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleOpenModal('edit', user)}
+                            onClick={() => handleViewProfile(user)}
                           >
-                            <PencilIcon className="h-4 w-4" />
+                            <EyeIcon className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setShowDeleteConfirm(true);
-                            }}
-                          >
-                            <TrashIcon className="h-4 w-4" />
-                          </Button>
+                          
+                          {(isAdmin || isOwnProfile) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenModal('edit', user)}
+                            >
+                              <PencilIcon className="h-4 w-4" />
+                            </Button>
+                          )}
+                          
+                          {isAdmin && !isOwnProfile && (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleResetPassword(user)}
+                              >
+                                <KeyIcon className="h-4 w-4" />
+                              </Button>
+                              
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedUser(user);
+                                  setShowDeleteConfirm(true);
+                                }}
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -457,6 +509,7 @@ const UserManagement = () => {
               value={formData.role}
               onChange={handleInputChange}
               required
+              disabled={!isAdmin}
             >
               <option value="admin">Administrador</option>
               <option value="staff">Personal</option>
@@ -597,6 +650,246 @@ const UserManagement = () => {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Profile Modal - Integrado directamente en este componente */}
+      <Modal
+        isOpen={showProfileModal}
+        onClose={() => {
+          setShowProfileModal(false);
+          setSelectedUser(null);
+        }}
+        title="Perfil de Usuario"
+        size="full"
+      >
+        {selectedUser && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900">Perfil de Usuario</h2>
+              <Button variant="outline" onClick={() => setShowProfileModal(false)}>
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Información Principal */}
+              <div className="lg:col-span-1">
+                <Card>
+                  <div className="text-center">
+                    <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-primary-100 mb-4">
+                      <svg className="h-16 w-16 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900">{selectedUser.name}</h3>
+                    <p className="text-gray-600">{selectedUser.email || 'Sin email'}</p>
+                    
+                    <div className="mt-4">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                        selectedUser.role === 'admin' ? 'bg-red-100 text-red-800' :
+                        selectedUser.role === 'staff' ? 'bg-blue-100 text-blue-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {selectedUser.role === 'admin' ? 'Administrador' :
+                         selectedUser.role === 'staff' ? 'Personal' : 'Practicante'}
+                      </span>
+                    </div>
+                    
+                    <div className="mt-2">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                        selectedUser.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {selectedUser.is_active ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 space-y-2 text-sm">
+                    <div className="flex justify-between py-2 border-b border-gray-200">
+                      <span className="text-gray-600">DNI:</span>
+                      <span className="font-medium text-gray-900">{selectedUser.dni}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-gray-200">
+                      <span className="text-gray-600">Género:</span>
+                      <span className="font-medium text-gray-900">{selectedUser.gender === 'masculino' ? 'Masculino' : 'Femenino'}</span>
+                    </div>
+                    {selectedUser.birth_date && (
+                      <div className="flex justify-between py-2 border-b border-gray-200">
+                        <span className="text-gray-600">Fecha de Nacimiento:</span>
+                        <span className="font-medium text-gray-900">{new Date(selectedUser.birth_date).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                    {selectedUser.age && (
+                      <div className="flex justify-between py-2 border-b border-gray-200">
+                        <span className="text-gray-600">Edad:</span>
+                        <span className="font-medium text-gray-900">{selectedUser.age} años</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Acciones para administradores */}
+                  {isAdmin && currentUser?.id !== selectedUser.id && (
+                    <div className="mt-6 space-y-2">
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          setSelectedUser(prev => ({ ...prev, is_active: !prev.is_active }));
+                          userService.updateUser(selectedUser.id, { is_active: !selectedUser.is_active });
+                          setSuccess(`Usuario ${selectedUser.is_active ? 'desactivado' : 'activado'} correctamente`);
+                          setTimeout(() => setSuccess(''), 3000);
+                        }}
+                      >
+                        {selectedUser.is_active ? 'Desactivar Usuario' : 'Activar Usuario'}
+                      </Button>
+                      
+                      <Button
+                        variant="danger"
+                        className="w-full"
+                        onClick={handleResetPassword}
+                      >
+                        <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 012 8m-3-4a1 1 0 11-2 0 1 1 0 012 0zm-3-4h6" />
+                        </svg>
+                        Restablecer Contraseña
+                      </Button>
+                    </div>
+                  )}
+                </Card>
+              </div>
+
+              {/* Información Detallada */}
+              <div className="lg:col-span-2">
+                <Card>
+                  <div className="space-y-6">
+                    {/* Información de Contacto */}
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">Información de Contacto</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center gap-3">
+                          <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          <div>
+                            <p className="text-sm text-gray-600">Email</p>
+                            <p className="font-medium text-gray-900">{selectedUser.email || 'No registrado'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 2.493a1 1 0 01-.684.949l.014.014a1 1 0 01.746.065l1.742 1.742a1 1 0 00.746.065l.014.014a1 1 0 01.684.949L19.972 22.316a1 1 0 01-.948.684H17a2 2 0 01-2-2V5z" />
+                          </svg>
+                          <div>
+                            <p className="text-sm text-gray-600">Teléfono</p>
+                            <p className="font-medium text-gray-900">{selectedUser.phone || 'No registrado'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <div>
+                            <p className="text-sm text-gray-600">Dirección</p>
+                            <p className="font-medium text-gray-900">{selectedUser.address || 'No registrado'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <div>
+                            <p className="text-sm text-gray-600">Distrito</p>
+                            <p className="font-medium text-gray-900">{selectedUser.district || 'No registrado'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Información de Prácticas (solo para practicantes) */}
+                    {selectedUser.role === 'intern' && (
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Información de Prácticas</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="flex items-center gap-3">
+                            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 14l9-5-9-5-9 5 9 5z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
+                            </svg>
+                            <div>
+                              <p className="text-sm text-gray-600">Universidad</p>
+                              <p className="font-medium text-gray-900">{selectedUser.university || 'No registrado'}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 14l9-5-9-5-9 5 9 5z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
+                            </svg>
+                            <div>
+                              <p className="text-sm text-gray-600">Semestre</p>
+                              <p className="font-medium text-gray-900">{selectedUser.semester || 'No registrado'}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <div>
+                              <p className="text-sm text-gray-600">Fecha de Inicio</p>
+                              <p className="font-medium text-gray-900">
+                                {selectedUser.start_date ? new Date(selectedUser.start_date).toLocaleDateString() : 'No registrado'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <div>
+                              <p className="text-sm text-gray-600">Fecha de Fin</p>
+                              <p className="font-medium text-gray-900">
+                                {selectedUser.end_date ? new Date(selectedUser.end_date).toLocaleDateString() : 'No registrado'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div>
+                              <p className="text-sm text-gray-600">Horario</p>
+                              <p className="font-medium text-gray-900">
+                                {selectedUser.entry_time && selectedUser.exit_time 
+                                  ? `${selectedUser.entry_time} - ${selectedUser.exit_time}`
+                                  : 'No registrado'
+                                }
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Información de Cargo (solo para staff) */}
+                    {selectedUser.role === 'staff' && selectedUser.position && (
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Información Laboral</h4>
+                        <div>
+                          <p className="text-sm text-gray-600">Cargo</p>
+                          <p className="font-medium text-gray-900">{selectedUser.position}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

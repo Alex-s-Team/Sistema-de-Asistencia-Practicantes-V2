@@ -21,7 +21,19 @@ class AttendanceController extends Controller
     public function store(Request $request)
     {
         try {
+            Log::info('=== INICIO DE REGISTRO DE ASISTENCIA ===');
+            Log::info('Request data:', $request->all());
+            
             $user = $request->user();
+            
+            if (!$user) {
+                Log::error('Usuario no autenticado');
+                return response()->json([
+                    'message' => 'Usuario no autenticado',
+                ], 401);
+            }
+
+            Log::info('Usuario autenticado:', ['user_id' => $user->id, 'role' => $user->role]);
 
             if (!$user->isIntern()) {
                 return response()->json([
@@ -29,6 +41,7 @@ class AttendanceController extends Controller
                 ], 403);
             }
 
+            // Validación
             $validated = $request->validate([
                 'type' => 'required|in:entry,exit',
                 'latitude' => 'required|numeric',
@@ -37,10 +50,22 @@ class AttendanceController extends Controller
                 'remote_reason' => 'nullable|string',
             ]);
 
-            // Obtener IP del usuario
+            Log::info('Datos validados correctamente:', $validated);
+
+            // Obtener IP
             $ipAddress = $request->ip();
+            Log::info('IP del usuario:', ['ip' => $ipAddress]);
             
-            // Validar ubicación y red
+            // ✅ CAPTURAR LA HORA EXACTA DEL MOMENTO DEL REGISTRO
+            $currentTime = Carbon::now();
+            $registrationTime = $currentTime->format('H:i:s');
+            
+            Log::info('Hora exacta de registro:', [
+                'timestamp' => $currentTime->toDateTimeString(),
+                'time' => $registrationTime
+            ]);
+            
+            // Validar ubicación y red (solo informativo)
             $validation = $this->validationService->validateAttendanceConditions(
                 $user->id,
                 $validated['latitude'],
@@ -48,22 +73,8 @@ class AttendanceController extends Controller
                 $ipAddress
             );
 
-            Log::info('Attendance validation:', [
-                'user' => $user->id,
-                'ip' => $ipAddress,
-                'validation' => $validation
-            ]);
+            Log::info('Resultado de validación:', $validation);
 
-            // Si no está en la red permitida Y no proporcionó razón, solicitar razón
-            if (!$validation['is_valid_network'] && !$validated['remote_reason']) {
-                return response()->json([
-                    'message' => 'Debes justificar el registro desde fuera de la red de oficina',
-                    'requires_remote_reason' => true,
-                    'validation' => $validation
-                ], 422);
-            }
-
-            // Verificar registro del día
             $today = Carbon::today();
             $existingAttendance = Attendance::where('user_id', $user->id)
                 ->whereDate('date', $today)
@@ -76,48 +87,68 @@ class AttendanceController extends Controller
                     ], 422);
                 }
 
-                $entryTime = now()->format('H:i:s');
+                // ✅ CALCULAR RETRASO CON LA HORA REAL DE REGISTRO
                 $hasDelay = false;
+                $delayMinutes = 0;
                 
                 if ($user->entry_time) {
                     $expectedTime = Carbon::createFromFormat('H:i:s', $user->entry_time);
-                    $actualTime = Carbon::createFromFormat('H:i:s', $entryTime);
-                    $hasDelay = $actualTime->greaterThan($expectedTime);
+                    $actualTime = Carbon::createFromFormat('H:i:s', $registrationTime);
+                    
+                    Log::info('Cálculo de retraso:', [
+                        'expected' => $expectedTime->format('H:i:s'),
+                        'actual' => $actualTime->format('H:i:s')
+                    ]);
+                    
+                    if ($actualTime->greaterThan($expectedTime)) {
+                        $hasDelay = true;
+                        $delayMinutes = $actualTime->diffInMinutes($expectedTime);
+                    }
                 }
 
+                // ✅ TODOS LOS REGISTROS REQUIEREN APROBACIÓN PARA QUE APAREZCAN EN EL DASHBOARD
                 $attendanceData = [
-                    'entry_time' => $entryTime,
+                    'entry_time' => $registrationTime, // ✅ Hora exacta de registro
                     'entry_latitude' => $validated['latitude'],
                     'entry_longitude' => $validated['longitude'],
                     'entry_ip' => $ipAddress,
-                    'has_delay' => $hasDelay,
-                    'is_remote_entry' => !$validation['is_valid_network'] || !$validation['is_valid_location'],
-                    'remote_entry_reason' => $validated['remote_reason'] ?? null,
+                    'entry_device' => $request->userAgent(),
                     'qr_token' => $validated['qr_token'],
-                    'status' => $validation['requires_approval'] ? 'pending' : 'approved',
+                    'distance_from_office' => $validation['distance_from_office'],
+                    'is_remote_entry' => !$validation['is_valid_network'],
+                    'remote_reason' => $validated['remote_reason'] ?? null,
+                    'has_delay' => $hasDelay,
+                    'delay_minutes' => $delayMinutes,
+                    'status' => 'pending', // ✅ SIEMPRE PENDIENTE para que aparezca en dashboard
                 ];
 
+                Log::info('Datos de asistencia a guardar:', $attendanceData);
+
                 if ($existingAttendance) {
+                    Log::info('Actualizando registro existente');
                     $existingAttendance->update($attendanceData);
-                    $attendance = $existingAttendance;
+                    $attendance = $existingAttendance->fresh();
                 } else {
+                    Log::info('Creando nuevo registro');
                     $attendance = Attendance::create(array_merge([
                         'user_id' => $user->id,
                         'date' => $today,
                     ], $attendanceData));
                 }
 
-                $message = $validation['requires_approval'] 
-                    ? 'Entrada registrada. Requiere aprobación del administrador.' 
-                    : 'Entrada registrada exitosamente';
+                Log::info('Asistencia guardada exitosamente:', [
+                    'id' => $attendance->id,
+                    'entry_time' => $attendance->entry_time,
+                    'status' => $attendance->status
+                ]);
 
                 return response()->json([
-                    'message' => $message,
+                    'message' => 'Entrada registrada. Requiere aprobación del administrador.',
                     'attendance' => $attendance,
                     'validation' => $validation,
                 ], 201);
 
-            } else { // exit
+            } else { // EXIT
                 if (!$existingAttendance || !$existingAttendance->entry_time) {
                     return response()->json([
                         'message' => 'Debes registrar tu entrada primero',
@@ -130,35 +161,59 @@ class AttendanceController extends Controller
                     ], 422);
                 }
 
-                $existingAttendance->update([
-                    'exit_time' => now()->format('H:i:s'),
+                $exitData = [
+                    'exit_time' => $registrationTime, // ✅ Hora exacta de registro
                     'exit_latitude' => $validated['latitude'],
                     'exit_longitude' => $validated['longitude'],
                     'exit_ip' => $ipAddress,
-                    'is_remote_exit' => !$validation['is_valid_network'] || !$validation['is_valid_location'],
-                    'remote_exit_reason' => $validated['remote_reason'] ?? null,
-                ]);
+                    'exit_device' => $request->userAgent(),
+                    'is_remote_exit' => !$validation['is_valid_network'],
+                    'status' => 'pending', // ✅ También requiere aprobación
+                ];
+
+                if (!empty($validated['remote_reason'])) {
+                    $exitData['remote_reason'] = $validated['remote_reason'];
+                }
+
+                Log::info('Datos de salida a guardar:', $exitData);
+
+                $existingAttendance->update($exitData);
+
+                Log::info('Salida registrada exitosamente');
 
                 return response()->json([
-                    'message' => 'Salida registrada exitosamente',
-                    'attendance' => $existingAttendance,
+                    'message' => 'Salida registrada. Requiere aprobación del administrador.',
+                    'attendance' => $existingAttendance->fresh(),
                     'validation' => $validation,
                 ]);
             }
 
         } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Error de validación:', [
+                'errors' => $e->errors(),
+                'message' => $e->getMessage()
+            ]);
+            
             return response()->json([
                 'message' => 'Error de validación',
                 'errors' => $e->errors(),
             ], 422);
+            
         } catch (\Exception $e) {
-            Log::error('Error in AttendanceController@store:', [
+            Log::error('ERROR CRÍTICO en AttendanceController@store:', [
                 'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString()
             ]);
+            
             return response()->json([
                 'message' => 'Error al registrar asistencia',
                 'error' => $e->getMessage(),
+                'debug' => config('app.debug') ? [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ] : null
             ], 500);
         }
     }
@@ -170,12 +225,10 @@ class AttendanceController extends Controller
 
             $query = Attendance::with(['user']);
 
-            // Si es practicante, solo ver sus asistencias
             if ($user->isIntern()) {
                 $query->where('user_id', $user->id);
             }
 
-            // Filtros opcionales
             if ($request->has('month')) {
                 $query->whereMonth('date', $request->month);
             }
@@ -211,14 +264,24 @@ class AttendanceController extends Controller
                 ], 403);
             }
 
+            // ✅ OBTENER TODAS LAS ASISTENCIAS PENDIENTES
             $pendingAttendances = Attendance::with(['user'])
                 ->where('status', 'pending')
                 ->orderBy('date', 'desc')
+                ->orderBy('created_at', 'desc')
                 ->get();
+
+            Log::info('Asistencias pendientes encontradas:', [
+                'count' => $pendingAttendances->count(),
+                'data' => $pendingAttendances->toArray()
+            ]);
 
             return response()->json($pendingAttendances);
         } catch (\Exception $e) {
-            Log::error('Error in AttendanceController@pending:', ['message' => $e->getMessage()]);
+            Log::error('Error in AttendanceController@pending:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'message' => 'Error al obtener asistencias pendientes',
                 'error' => $e->getMessage()
@@ -251,15 +314,25 @@ class AttendanceController extends Controller
                 'validated_at' => now(),
             ]);
 
+            Log::info('Asistencia validada:', [
+                'attendance_id' => $id,
+                'status' => $validated['status'],
+                'validated_by' => $user->id
+            ]);
+
             return response()->json([
                 'message' => 'Asistencia validada exitosamente',
                 'attendance' => $attendance->load('user'),
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Error in AttendanceController@validate:', ['message' => $e->getMessage()]);
+            Log::error('Error in AttendanceController@validate:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'message' => 'Error al validar asistencia',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -273,7 +346,6 @@ class AttendanceController extends Controller
             $year = $request->input('year', now()->year);
 
             if ($user->isIntern()) {
-                // Estadísticas para practicante
                 $totalDays = Attendance::where('user_id', $user->id)
                     ->whereMonth('date', $month)
                     ->whereYear('date', $year)
@@ -299,7 +371,6 @@ class AttendanceController extends Controller
                     'attendance_rate' => $totalDays > 0 ? round(($presentDays / $totalDays) * 100, 2) : 0,
                 ];
             } else {
-                // Estadísticas generales para admin/staff
                 $stats = [
                     'total_users' => \App\Models\User::where('role', 'intern')->where('is_active', true)->count(),
                     'total_attendances' => Attendance::whereMonth('date', $month)->whereYear('date', $year)->count(),

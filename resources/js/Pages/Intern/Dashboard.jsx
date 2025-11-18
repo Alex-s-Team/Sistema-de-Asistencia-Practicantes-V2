@@ -14,6 +14,7 @@ import {
   ExclamationTriangleIcon,
   CalendarIcon,
   ClipboardDocumentListIcon,
+  PlayIcon,
 } from '@heroicons/react/24/outline';
 import { formatDate, formatTime } from '../../Utils/helpers';
 
@@ -23,7 +24,11 @@ const InternDashboard = () => {
   const [error, setError] = useState('');
   const [stats, setStats] = useState(null);
   const [todayAttendance, setTodayAttendance] = useState(null);
-  const [myTasks, setMyTasks] = useState([]);
+  const [tasks, setTasks] = useState({
+    pending: [],
+    in_progress: [],
+    completed: [],
+  });
 
   useEffect(() => {
     loadDashboardData();
@@ -49,10 +54,9 @@ const InternDashboard = () => {
         setTodayAttendance(attendances[0]);
       }
 
-      // Cargar mis tareas
+      // Cargar mis tareas - Usando la misma estructura que en MyTasks
       const tasksData = await taskService.getMyTasks();
-      const tasks = Array.isArray(tasksData) ? tasksData : [];
-      setMyTasks(tasks);
+      setTasks(tasksData);
 
     } catch (err) {
       console.error('Error loading dashboard:', err);
@@ -73,9 +77,9 @@ const InternDashboard = () => {
   const hasMarkedEntry = todayAttendance?.entry_time;
   const hasMarkedExit = todayAttendance?.exit_time;
 
-  // Filtrar tareas
-  const pendingTasks = myTasks.filter(t => t.status === 'pending');
-  const inProgressTasks = myTasks.filter(t => t.status === 'in_progress');
+  // Combinar tareas pendientes y en progreso
+  const activeTasks = [...tasks.pending, ...tasks.in_progress];
+  const completedTasks = tasks.completed;
 
   return (
     <div className="space-y-6">
@@ -193,7 +197,7 @@ const InternDashboard = () => {
         </Card>
       </div>
 
-      {/* My Tasks */}
+      {/* My Tasks - Actualizado para mostrar correctamente las tareas activas */}
       <Card
         title="Mis Tareas Activas"
         subtitle="Tareas asignadas pendientes y en progreso"
@@ -205,14 +209,14 @@ const InternDashboard = () => {
           </Link>
         }
       >
-        {myTasks.length === 0 ? (
+        {activeTasks.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <ClipboardDocumentListIcon className="h-16 w-16 mx-auto mb-4 text-gray-400" />
             <p>No tienes tareas activas en este momento</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {[...inProgressTasks, ...pendingTasks].slice(0, 5).map((task) => (
+            {activeTasks.slice(0, 5).map((task) => (
               <div 
                 key={task.id}
                 className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
@@ -236,6 +240,39 @@ const InternDashboard = () => {
           </div>
         )}
       </Card>
+
+      {/* Task Stats Cards - Añadido para mostrar estadísticas de tareas */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="bg-gradient-to-br from-yellow-50 to-white border-l-4 border-yellow-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Tareas Pendientes</p>
+              <p className="text-3xl font-bold text-gray-900">{tasks.pending.length}</p>
+            </div>
+            <ClockIcon className="h-12 w-12 text-yellow-500" />
+          </div>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-blue-50 to-white border-l-4 border-blue-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">En Progreso</p>
+              <p className="text-3xl font-bold text-gray-900">{tasks.in_progress.length}</p>
+            </div>
+            <PlayIcon className="h-12 w-12 text-blue-500" />
+          </div>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-green-50 to-white border-l-4 border-green-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Completadas</p>
+              <p className="text-3xl font-bold text-gray-900">{tasks.completed.length}</p>
+            </div>
+            <CheckCircleIcon className="h-12 w-12 text-green-500" />
+          </div>
+        </Card>
+      </div>
 
       {/* Additional Info */}
       <Card title="Información Adicional">

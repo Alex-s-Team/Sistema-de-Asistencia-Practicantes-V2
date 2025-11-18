@@ -11,24 +11,26 @@ class AttendanceValidationService
      */
     public function validateAttendanceConditions($userId, $latitude, $longitude, $ipAddress)
     {
-        $isValidLocation = $this->validateLocation($latitude, $longitude);
+        $distanceFromOffice = $this->getDistanceFromOffice($latitude, $longitude);
         $isValidNetwork = $this->validateNetwork($ipAddress);
         
-        // Requiere aprobación si está fuera de ubicación O fuera de red
-        $requiresApproval = !$isValidLocation || !$isValidNetwork;
+        // Requiere aprobación SOLO si está fuera de red
+        // La ubicación se valida pero no bloquea el registro
+        $requiresApproval = !$isValidNetwork;
 
         Log::info('Attendance validation result:', [
             'user_id' => $userId,
             'ip' => $ipAddress,
             'latitude' => $latitude,
             'longitude' => $longitude,
-            'is_valid_location' => $isValidLocation,
+            'distance_from_office' => $distanceFromOffice,
             'is_valid_network' => $isValidNetwork,
             'requires_approval' => $requiresApproval
         ]);
 
         return [
-            'is_valid_location' => $isValidLocation,
+            'distance_from_office' => $distanceFromOffice,
+            'is_far_from_office' => $distanceFromOffice > 500, // Más de 500 metros
             'is_valid_network' => $isValidNetwork,
             'requires_approval' => $requiresApproval,
             'ip_address' => $ipAddress,
@@ -40,28 +42,19 @@ class AttendanceValidationService
     }
 
     /**
-     * Validar ubicación GPS
+     * Obtener distancia desde la oficina
      */
-    private function validateLocation($latitude, $longitude)
+    public function getDistanceFromOffice($latitude, $longitude)
     {
         $officeLatitude = config('attendance.office_latitude');
         $officeLongitude = config('attendance.office_longitude');
-        $maxDistance = config('attendance.office_radius_meters');
 
-        $distance = $this->calculateDistance(
+        return $this->calculateDistance(
             $latitude,
             $longitude,
             $officeLatitude,
             $officeLongitude
         );
-
-        Log::info('Location validation:', [
-            'distance' => $distance,
-            'max_distance' => $maxDistance,
-            'is_valid' => $distance <= $maxDistance
-        ]);
-
-        return $distance <= $maxDistance;
     }
 
     /**
@@ -71,12 +64,10 @@ class AttendanceValidationService
     {
         $allowedNetwork = config('attendance.allowed_network');
         
-        // Si no hay red configurada, permitir todas
         if (!$allowedNetwork) {
             return true;
         }
 
-        // Verificar si la IP está en el rango permitido
         list($subnet, $mask) = explode('/', $allowedNetwork);
         
         $ipLong = ip2long($ipAddress);
@@ -110,6 +101,6 @@ class AttendanceValidationService
 
         $c = 2 * atan2(sqrt($a), sqrt(1-$a));
 
-        return $earthRadius * $c;
+        return round($earthRadius * $c, 2); // Distancia en metros con 2 decimales
     }
 }

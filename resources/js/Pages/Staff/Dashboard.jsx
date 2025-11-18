@@ -13,6 +13,8 @@ import {
   UsersIcon,
   PlusCircleIcon,
   CheckCircleIcon,
+  PlayIcon,
+  ClockIcon,
 } from '@heroicons/react/24/outline';
 import { formatDate } from '../../Utils/helpers';
 
@@ -26,6 +28,11 @@ const StaffDashboard = () => {
     inProgressTasks: 0,
     completedTasks: 0,
     totalInterns: 0,
+  });
+  const [tasks, setTasks] = useState({
+    pending: [],
+    in_progress: [],
+    completed: [],
   });
   const [recentTasks, setRecentTasks] = useState([]);
 
@@ -48,19 +55,44 @@ const StaffDashboard = () => {
         interns: internsData
       });
 
-      // Las respuestas ya son arrays directamente
-      const tasks = Array.isArray(tasksData) ? tasksData : [];
+      // Procesar datos de tareas - Usando la misma estructura que en MyTasks
+      let tasksList = {
+        pending: [],
+        in_progress: [],
+        completed: [],
+      };
+      
+      if (Array.isArray(tasksData)) {
+        // Si viene como array, lo agrupamos por estado
+        tasksList.pending = tasksData.filter(t => t.status === 'pending');
+        tasksList.in_progress = tasksData.filter(t => t.status === 'in_progress');
+        tasksList.completed = tasksData.filter(t => t.status === 'completed');
+      } else if (tasksData && typeof tasksData === 'object') {
+        // Si ya viene agrupado por estado
+        tasksList = {
+          pending: tasksData.pending || [],
+          in_progress: tasksData.in_progress || [],
+          completed: tasksData.completed || [],
+        };
+      }
+      
+      setTasks(tasksList);
+      
+      // Combinar tareas para recientes
+      const allTasks = [...tasksList.pending, ...tasksList.in_progress, ...tasksList.completed];
+      setRecentTasks(allTasks.slice(0, 6));
+
+      // Procesar internos
       const interns = Array.isArray(internsData) ? internsData : [];
       
+      // Actualizar estadísticas
       setStats({
-        totalTasks: tasks.length,
-        pendingTasks: tasks.filter(t => t.status === 'pending').length,
-        inProgressTasks: tasks.filter(t => t.status === 'in_progress').length,
-        completedTasks: tasks.filter(t => t.status === 'completed').length,
+        totalTasks: allTasks.length,
+        pendingTasks: tasksList.pending.length,
+        inProgressTasks: tasksList.in_progress.length,
+        completedTasks: tasksList.completed.length,
         totalInterns: interns.length,
       });
-
-      setRecentTasks(tasks.slice(0, 6));
     } catch (err) {
       console.error('Error loading dashboard:', err);
       setError('Error al cargar el dashboard: ' + (err.response?.data?.message || err.message));
@@ -76,6 +108,9 @@ const StaffDashboard = () => {
       </div>
     );
   }
+
+  // Combinar tareas pendientes y en progreso
+  const activeTasks = [...tasks.pending, ...tasks.in_progress];
 
   return (
     <div className="space-y-6">
@@ -117,7 +152,7 @@ const StaffDashboard = () => {
               <p className="text-3xl font-bold text-gray-900">{stats.pendingTasks}</p>
               <p className="text-xs text-gray-500 mt-1">por iniciar</p>
             </div>
-            <ClipboardDocumentListIcon className="h-12 w-12 text-yellow-500" />
+            <ClockIcon className="h-12 w-12 text-yellow-500" />
           </div>
         </Card>
 
@@ -128,7 +163,7 @@ const StaffDashboard = () => {
               <p className="text-3xl font-bold text-gray-900">{stats.inProgressTasks}</p>
               <p className="text-xs text-gray-500 mt-1">en desarrollo</p>
             </div>
-            <ClipboardDocumentListIcon className="h-12 w-12 text-purple-500" />
+            <PlayIcon className="h-12 w-12 text-purple-500" />
           </div>
         </Card>
 

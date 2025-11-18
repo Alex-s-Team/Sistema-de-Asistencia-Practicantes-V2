@@ -403,12 +403,13 @@ const Justifications = () => {
             name="type"
             value={formData.type}
             onChange={handleInputChange}
+            options={[
+                { value: 'low', label: 'Selecciona un tipo' },
+                { value: 'absence', label: 'Falta' },
+                { value: 'delay', label: 'Tardanza' },
+              ]}
             required
-          >
-            <option value="">Selecciona un tipo</option>
-            <option value="absence">Falta</option>
-            <option value="delay">Tardanza</option>
-          </Select>
+          />
 
           <Input
             label="Fecha"
@@ -419,21 +420,21 @@ const Justifications = () => {
             required
           />
 
-          {formData.type && (
+          {formData.type && quickReasons[formData.type] && (
             <Select
               label="Motivo"
               name="reason"
               value={formData.reason}
               onChange={handleInputChange}
-              required
-            >
-              <option value="">Selecciona un motivo</option>
-              {quickReasons[formData.type]?.map(reason => (
-                <option key={reason.value} value={reason.value}>
-                  {reason.label}
-                </option>
-              ))}
-            </Select>
+              options={[
+                { value: 'low', label: 'Selecciona un motivo' },
+                ...quickReasons[formData.type].map(reason => ({
+                  value: reason.value,
+                  label: reason.label
+                }))
+              ]} 
+              required={formData.type !== 'low'}
+            />
           )}
 
           {formData.reason === 'otros' && (

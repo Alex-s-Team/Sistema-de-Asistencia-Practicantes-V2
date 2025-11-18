@@ -90,6 +90,9 @@ class TaskController extends Controller
                 ], 403);
             }
 
+            // Logging para debug
+            Log::info('Task creation request:', $request->all());
+
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
                 'description' => 'nullable|string',
@@ -99,6 +102,9 @@ class TaskController extends Controller
                 'due_date' => 'required|date|after_or_equal:start_date',
                 'assigned_users' => 'required|array|min:1',
                 'assigned_users.*' => 'required|integer|exists:users,id',
+            ], [
+                'assigned_users.required' => 'Debes asignar al menos un usuario',
+                'assigned_users.*.exists' => 'Uno o más usuarios seleccionados no existen',
             ]);
 
             DB::beginTransaction();
@@ -113,7 +119,9 @@ class TaskController extends Controller
                 'created_by' => $user->id,
             ]);
 
-            $task->assignedUsers()->attach($validated['assigned_users']);
+            // Convertir a enteros y asignar
+            $userIds = array_map('intval', $validated['assigned_users']);
+            $task->assignedUsers()->attach($userIds);
 
             DB::commit();
 
@@ -126,6 +134,9 @@ class TaskController extends Controller
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
+            Log::error('Validation error in TaskController@store:', [
+                'errors' => $e->errors()
+            ]);
             return response()->json([
                 'message' => 'Error de validación',
                 'errors' => $e->errors(),

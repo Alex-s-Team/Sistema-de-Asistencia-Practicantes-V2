@@ -15,22 +15,32 @@ import {
   ExclamationCircleIcon,
   ChartBarIcon,
   ClockIcon,
+  PlayIcon,
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 import { formatDate } from '../../Utils/helpers';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(''); // 👈 AGREGADO
+  const [error, setError] = useState('');
   const [stats, setStats] = useState({
     totalInterns: 0,
     activeInterns: 0,
     pendingAttendances: 0,
     pendingJustifications: 0,
     todayAttendances: 0,
-    activeTasks: 0,
+    totalTasks: 0,
+    pendingTasks: 0,
+    inProgressTasks: 0,
+    completedTasks: 0,
   });
-  const [recentData, setRecentData] = useState({ // 👈 AGREGADO
+  const [tasks, setTasks] = useState({
+    pending: [],
+    in_progress: [],
+    completed: [],
+  });
+  const [recentData, setRecentData] = useState({
     interns: [],
     pendingAttendances: [],
     tasks: [],
@@ -58,25 +68,53 @@ const AdminDashboard = () => {
         tasks: tasksData
       });
 
+      // Procesar datos de tareas - Usando la misma estructura que en MyTasks
+      let tasksList = {
+        pending: [],
+        in_progress: [],
+        completed: [],
+      };
+      
+      if (Array.isArray(tasksData)) {
+        // Si viene como array, lo agrupamos por estado
+        tasksList.pending = tasksData.filter(t => t.status === 'pending');
+        tasksList.in_progress = tasksData.filter(t => t.status === 'in_progress');
+        tasksList.completed = tasksData.filter(t => t.status === 'completed');
+      } else if (tasksData && typeof tasksData === 'object') {
+        // Si ya viene agrupado por estado
+        tasksList = {
+          pending: tasksData.pending || [],
+          in_progress: tasksData.in_progress || [],
+          completed: tasksData.completed || [],
+        };
+      }
+      
+      setTasks(tasksList);
+      
+      // Combinar tareas para recientes
+      const allTasks = [...tasksList.pending, ...tasksList.in_progress, ...tasksList.completed];
+      
       // Calcular stats
+      const interns = Array.isArray(internsData) ? internsData : [];
+      const pending = Array.isArray(pendingData) ? pendingData : [];
+      
       setStats({
-        totalInterns: Array.isArray(internsData) ? internsData.length : 0,
-        activeInterns: Array.isArray(internsData) 
-          ? internsData.filter(i => i.is_active).length 
-          : 0,
-        pendingAttendances: Array.isArray(pendingData) ? pendingData.length : 0,
+        totalInterns: interns.length,
+        activeInterns: interns.filter(i => i.is_active).length,
+        pendingAttendances: pending.length,
         pendingJustifications: 0, // TODO: implementar cuando tengamos el endpoint
         todayAttendances: 0, // TODO: implementar
-        activeTasks: Array.isArray(tasksData) 
-          ? tasksData.filter(t => t.status !== 'completed' && t.status !== 'cancelled').length 
-          : 0,
+        totalTasks: allTasks.length,
+        pendingTasks: tasksList.pending.length,
+        inProgressTasks: tasksList.in_progress.length,
+        completedTasks: tasksList.completed.length,
       });
 
       // Guardar datos recientes
       setRecentData({
-        interns: Array.isArray(internsData) ? internsData.slice(0, 5) : [],
-        pendingAttendances: Array.isArray(pendingData) ? pendingData.slice(0, 5) : [],
-        tasks: Array.isArray(tasksData) ? tasksData.slice(0, 5) : [],
+        interns: interns.slice(0, 5),
+        pendingAttendances: pending.slice(0, 5),
+        tasks: allTasks.slice(0, 5),
       });
 
     } catch (err) {
@@ -94,6 +132,9 @@ const AdminDashboard = () => {
       </div>
     );
   }
+
+  // Combinar tareas pendientes y en progreso
+  const activeTasks = [...tasks.pending, ...tasks.in_progress];
 
   return (
     <div className="space-y-6">
@@ -128,6 +169,7 @@ const AdminDashboard = () => {
           </div>
         </Card>
 
+        
         <Card className="bg-gradient-to-br from-green-50 to-white border-l-4 border-green-500">
           <div className="flex items-center justify-between">
             <div>
@@ -139,28 +181,35 @@ const AdminDashboard = () => {
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-br from-yellow-50 to-white border-l-4 border-yellow-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Asistencias Pendientes</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.pendingAttendances}</p>
-              <p className="text-xs text-gray-500 mt-1">por validar</p>
+        <Link to="/validate-attendance">
+          <Card className="bg-gradient-to-br from-yellow-50 to-white border-l-4 border-yellow-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Asistencias Pendientes</p>
+                <p className="text-3xl font-bold text-gray-900">{stats.pendingAttendances}</p>
+                <p className="text-xs text-gray-500 mt-1">por validar</p>
+              </div>
+              <ClockIcon className="h-12 w-12 text-yellow-500" />
             </div>
-            <ClockIcon className="h-12 w-12 text-yellow-500" />
-          </div>
-        </Card>
+          </Card>
+        </Link>
 
-        <Card className="bg-gradient-to-br from-purple-50 to-white border-l-4 border-purple-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Tareas Activas</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.activeTasks}</p>
-              <p className="text-xs text-gray-500 mt-1">en progreso</p>
+        {/* MODIFICACIÓN: Tarjeta de Tareas Activas actualizada */}
+        <Link to="/tasks">
+          <Card className="bg-gradient-to-br from-purple-50 to-white border-l-4 border-purple-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Tareas Activas</p>
+                <p className="text-3xl font-bold text-gray-900">{stats.pendingTasks + stats.inProgressTasks}</p>
+                <p className="text-xs text-gray-500 mt-1">pendientes y en progreso</p>
+              </div>
+              <ClipboardDocumentCheckIcon className="h-12 w-12 text-purple-500" />
             </div>
-            <ClipboardDocumentCheckIcon className="h-12 w-12 text-purple-500" />
-          </div>
-        </Card>
+          </Card>
+        </Link>
       </div>
+
+
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -194,7 +243,7 @@ const AdminDashboard = () => {
               <ClipboardDocumentCheckIcon className="h-12 w-12 text-blue-500 mx-auto mb-3" />
               <h3 className="font-semibold text-gray-900 mb-2">Gestionar Tareas</h3>
               <p className="text-sm text-gray-600">
-                {stats.activeTasks} tareas activas
+                {stats.totalTasks} tareas registradas
               </p>
             </div>
           </Card>

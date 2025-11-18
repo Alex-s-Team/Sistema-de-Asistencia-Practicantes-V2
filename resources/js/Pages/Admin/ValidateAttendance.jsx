@@ -15,7 +15,8 @@ import {
   GlobeAltIcon,
   QrCodeIcon,
   ShieldCheckIcon,
-  ShieldExclamationIcon
+  ShieldExclamationIcon,
+  ChatBubbleLeftIcon
 } from '@heroicons/react/24/outline';
 
 const ValidateAttendance = () => {
@@ -25,16 +26,23 @@ const ValidateAttendance = () => {
   const [showModal, setShowModal] = useState(false);
   const [validating, setValidating] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [validationNotes, setValidationNotes] = useState('');
 
   useEffect(() => {
     loadPendingAttendances();
+    // Auto-refresh cada 30 segundos
+    const interval = setInterval(loadPendingAttendances, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadPendingAttendances = async () => {
     try {
       setLoading(true);
       const response = await attendanceService.getPending();
-      setAttendances(Array.isArray(response) ? response : response.data || []);
+      const data = Array.isArray(response) ? response : response.data || [];
+      
+      console.log('Asistencias pendientes cargadas:', data);
+      setAttendances(data);
     } catch (error) {
       console.error('Error loading attendances:', error);
       setMessage({ type: 'error', text: 'Error al cargar las asistencias' });
@@ -43,10 +51,13 @@ const ValidateAttendance = () => {
     }
   };
 
-  const handleValidate = async (attendanceId, status) => {
+  const handleValidate = async (attendanceId, status, respondPrivately = false) => {
     try {
       setValidating(true);
-      await attendanceService.validate(attendanceId, { status });
+      await attendanceService.validate(attendanceId, { 
+        status,
+        validation_notes: validationNotes 
+      });
       
       setMessage({
         type: 'success',
@@ -55,8 +66,17 @@ const ValidateAttendance = () => {
       
       setShowModal(false);
       setSelectedAttendance(null);
+      setValidationNotes('');
       await loadPendingAttendances();
+
+      // Si eligió responder en privado, redirigir al chat
+      if (respondPrivately && selectedAttendance?.user?.id) {
+        setTimeout(() => {
+          window.location.href = `/chat?user=${selectedAttendance.user.id}`;
+        }, 1000);
+      }
     } catch (error) {
+      console.error('Error validating:', error);
       setMessage({
         type: 'error',
         text: error.response?.data?.message || 'Error al validar asistencia',
@@ -68,11 +88,11 @@ const ValidateAttendance = () => {
 
   const openValidationModal = (attendance) => {
     setSelectedAttendance(attendance);
+    setValidationNotes('');
     setShowModal(true);
   };
 
   const isValidNetwork = (ip) => {
-    // Verificar si la IP está en el rango 192.168.50.0/24
     if (!ip) return false;
     const parts = ip.split('.');
     return parts[0] === '192' && parts[1] === '168' && parts[2] === '50';
@@ -80,8 +100,18 @@ const ValidateAttendance = () => {
 
   const isQRValid = (token) => {
     if (!token) return false;
-    // Verificar formato del token (QR-timestamp-random)
     return token.startsWith('QR-') && token.split('-').length === 3;
+  };
+
+  const getDistanceStatus = (distance) => {
+    if (!distance) return { color: 'gray', text: 'Sin datos', status: 'unknown' };
+    if (distance <= 500) {
+      return { color: 'green', text: 'Dentro de oficina', status: 'good' };
+    } else if (distance <= 1000) {
+      return { color: 'yellow', text: 'Cerca de oficina', status: 'warning' };
+    } else {
+      return { color: 'red', text: 'Lejos de oficina', status: 'danger' };
+    }
   };
 
   const openMapLocation = (lat, lng) => {
@@ -94,6 +124,16 @@ const ValidateAttendance = () => {
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  const formatTime = (time) => {
+    if (!time) return 'N/A';
+    // Convertir formato 24h a 12h con AM/PM
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
   };
 
   if (loading) {
@@ -112,6 +152,14 @@ const ValidateAttendance = () => {
         <div className="text-right">
           <p className="text-sm text-gray-600">Total pendientes</p>
           <p className="text-3xl font-bold text-yellow-600">{attendances.length}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadPendingAttendances}
+            className="mt-2"
+          >
+            Actualizar
+          </Button>
         </div>
       </div>
 
@@ -140,11 +188,13 @@ const ValidateAttendance = () => {
           {attendances.map((attendance) => {
             const networkValid = isValidNetwork(attendance.entry_ip || attendance.exit_ip);
             const qrValid = isQRValid(attendance.qr_token);
+            const distanceStatus = getDistanceStatus(attendance.distance_from_office);
+            const isEntry = !!attendance.entry_time;
             
             return (
               <Card key={attendance.id} className="hover:shadow-lg transition-shadow">
                 <div className="space-y-4">
-                  {/* Header con usuario */}
+                  {/* Header */}
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
@@ -161,32 +211,48 @@ const ValidateAttendance = () => {
                         </p>
                       </div>
                     </div>
-                    <Badge type="status" value="pending">
-                      Pendiente
-                    </Badge>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge type="status" value="pending">
+                        Pendiente
+                      </Badge>
+                      <Badge type={isEntry ? 'primary' : 'secondary'}>
+                        {isEntry ? 'ENTRADA' : 'SALIDA'}
+                      </Badge>
+                    </div>
                   </div>
 
-                  {/* Información básica */}
+                  {/* Info Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Fecha y Hora */}
                     <div className="flex items-center gap-2 text-sm">
                       <ClockIcon className="h-5 w-5 text-gray-400" />
                       <div>
                         <p className="font-medium text-gray-900">
                           {formatDate(attendance.date)}
                         </p>
-                        <p className="text-gray-600">
-                          {attendance.entry_time ? `Entrada: ${attendance.entry_time}` : `Salida: ${attendance.exit_time}`}
+                        <p className="text-lg font-bold text-primary-600">
+                          {formatTime(attendance.entry_time || attendance.exit_time)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Registrado: {new Date(attendance.created_at).toLocaleString('es-PE')}
                         </p>
                       </div>
                     </div>
 
+                    {/* Ubicación GPS */}
                     <div className="flex items-center gap-2 text-sm">
                       <MapPinIcon className="h-5 w-5 text-gray-400" />
                       <div className="flex-1">
                         <p className="font-medium text-gray-900">Ubicación GPS</p>
-                        <p className="text-xs text-gray-600">
-                          {attendance.entry_latitude || attendance.exit_latitude}, {attendance.entry_longitude || attendance.exit_longitude}
+                        <p className="text-xs text-gray-600 font-mono">
+                          {(attendance.entry_latitude || attendance.exit_latitude)?.toFixed(6)}, 
+                          {(attendance.entry_longitude || attendance.exit_longitude)?.toFixed(6)}
                         </p>
+                        {attendance.distance_from_office && (
+                          <p className={`text-xs font-semibold mt-1 text-${distanceStatus.color}-600`}>
+                            📍 {Math.round(attendance.distance_from_office)}m - {distanceStatus.text}
+                          </p>
+                        )}
                         <button
                           onClick={() => openMapLocation(
                             attendance.entry_latitude || attendance.exit_latitude,
@@ -194,36 +260,40 @@ const ValidateAttendance = () => {
                           )}
                           className="text-xs text-blue-600 hover:underline mt-1"
                         >
-                          Ver en el mapa →
+                          🗺️ Ver en Google Maps →
                         </button>
                       </div>
                     </div>
 
+                    {/* Red e IP */}
                     <div className="flex items-center gap-2 text-sm">
                       <GlobeAltIcon className="h-5 w-5 text-gray-400" />
                       <div>
-                        <p className="font-medium text-gray-900">Dirección IP</p>
-                        <p className="text-xs text-gray-600">
+                        <p className="font-medium text-gray-900">Conexión</p>
+                        <p className="text-xs text-gray-600 font-mono">
                           {attendance.entry_ip || attendance.exit_ip}
                         </p>
                         <div className="mt-1">
                           {networkValid ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                            <span className="inline-flex items-center gap-1 text-xs text-green-600 font-semibold">
                               <CheckCircleIcon className="h-3 w-3" />
-                              Red de oficina
+                              Red de Oficina
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-xs text-red-600">
+                            <span className="inline-flex items-center gap-1 text-xs text-red-600 font-semibold">
                               <ExclamationTriangleIcon className="h-3 w-3" />
-                              Red externa
+                              Red Externa
                             </span>
                           )}
                         </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {attendance.entry_device || attendance.exit_device || 'Dispositivo desconocido'}
+                        </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Verificación de QR */}
+                  {/* Token QR */}
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50">
                     <QrCodeIcon className="h-5 w-5 text-gray-400" />
                     <div className="flex-1">
@@ -236,19 +306,19 @@ const ValidateAttendance = () => {
                       {qrValid ? (
                         <div className="flex items-center gap-2 text-green-600">
                           <ShieldCheckIcon className="h-5 w-5" />
-                          <span className="text-sm font-semibold">QR Verificado</span>
+                          <span className="text-sm font-semibold">✓ Verificado</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 text-red-600">
                           <ShieldExclamationIcon className="h-5 w-5" />
-                          <span className="text-sm font-semibold">QR Falsificado</span>
+                          <span className="text-sm font-semibold">⚠ Sospechoso</span>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Razón remota si existe */}
-                  {(attendance.remote_entry_reason || attendance.remote_exit_reason) && (
+                  {/* Razón Remota */}
+                  {attendance.remote_reason && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                       <div className="flex items-start gap-2">
                         <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
@@ -257,36 +327,49 @@ const ValidateAttendance = () => {
                             Registro Remoto
                           </p>
                           <p className="text-sm text-yellow-800 mt-1">
-                            Motivo: {attendance.remote_entry_reason || attendance.remote_exit_reason}
+                            {attendance.remote_reason}
                           </p>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Alertas de seguridad */}
-                  {(!networkValid || !qrValid) && (
+                  {/* Alertas de Seguridad */}
+                  {(!networkValid || !qrValid || distanceStatus.status === 'danger') && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                       <div className="flex items-start gap-2">
                         <ExclamationTriangleIcon className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
                         <div className="flex-1">
                           <p className="font-medium text-red-900 text-sm mb-2">
-                            Alertas de Seguridad:
+                            ⚠️ Alertas de Seguridad:
                           </p>
                           <ul className="text-xs text-red-800 space-y-1">
-                            {!networkValid && (
-                              <li>• Registro desde red externa (no autorizada)</li>
+                            {distanceStatus.status === 'danger' && (
+                              <li>• Usuario está a {Math.round(attendance.distance_from_office)}m de la oficina (muy lejos)</li>
                             )}
-                            {!qrValid && (
-                              <li>• Token QR no reconocido por el sistema</li>
-                            )}
+                            {!networkValid && <li>• Registro desde red externa (no es red de oficina)</li>}
+                            {!qrValid && <li>• Token QR no reconocido o inválido</li>}
                           </ul>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Botones de acción */}
+                  {/* Retraso */}
+                  {attendance.has_delay && isEntry && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <ClockIcon className="h-5 w-5 text-orange-600" />
+                        <div>
+                          <p className="font-medium text-orange-900 text-sm">
+                            Llegó con retraso: {attendance.delay_minutes} minutos
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botones de Acción */}
                   <div className="flex gap-3 pt-4 border-t">
                     <Button
                       variant="outline"
@@ -322,11 +405,11 @@ const ValidateAttendance = () => {
         </div>
       )}
 
-      {/* Modal de detalles */}
+      {/* Modal de Detalles */}
       <Modal
         isOpen={showModal}
         onClose={() => !validating && setShowModal(false)}
-        title="Detalles de Asistencia"
+        title="Revisar Asistencia"
         size="lg"
       >
         {selectedAttendance && (
@@ -335,16 +418,36 @@ const ValidateAttendance = () => {
               <h4 className="font-semibold text-gray-900 mb-2">Información Completa</h4>
               <div className="space-y-2 text-sm">
                 <p><strong>Usuario:</strong> {selectedAttendance.user?.name}</p>
+                <p><strong>Email:</strong> {selectedAttendance.user?.email}</p>
                 <p><strong>Fecha:</strong> {formatDate(selectedAttendance.date)}</p>
-                <p><strong>Tipo:</strong> {selectedAttendance.entry_time ? 'Entrada' : 'Salida'}</p>
-                <p><strong>Hora:</strong> {selectedAttendance.entry_time || selectedAttendance.exit_time}</p>
+                <p><strong>Tipo:</strong> {selectedAttendance.entry_time ? 'ENTRADA' : 'SALIDA'}</p>
+                <p><strong>Hora Registrada:</strong> {formatTime(selectedAttendance.entry_time || selectedAttendance.exit_time)}</p>
                 <p><strong>IP:</strong> {selectedAttendance.entry_ip || selectedAttendance.exit_ip}</p>
                 <p><strong>Coordenadas:</strong> {selectedAttendance.entry_latitude || selectedAttendance.exit_latitude}, {selectedAttendance.entry_longitude || selectedAttendance.exit_longitude}</p>
+                {selectedAttendance.distance_from_office && (
+                  <p><strong>Distancia:</strong> {Math.round(selectedAttendance.distance_from_office)}m de la oficina</p>
+                )}
                 <p><strong>Token QR:</strong> {selectedAttendance.qr_token}</p>
+                {selectedAttendance.has_delay && (
+                  <p className="text-orange-600"><strong>Retraso:</strong> {selectedAttendance.delay_minutes} minutos</p>
+                )}
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nota de validación (opcional)
+              </label>
+              <textarea
+                value={validationNotes}
+                onChange={(e) => setValidationNotes(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="Agrega una nota si es necesario..."
+              />
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t">
               <Button
                 variant="outline"
                 onClick={() => setShowModal(false)}
@@ -355,7 +458,7 @@ const ValidateAttendance = () => {
               </Button>
               <Button
                 variant="danger"
-                onClick={() => handleValidate(selectedAttendance.id, 'rejected')}
+                onClick={() => handleValidate(selectedAttendance.id, 'rejected', false)}
                 loading={validating}
                 disabled={validating}
                 className="flex-1"
@@ -364,7 +467,7 @@ const ValidateAttendance = () => {
               </Button>
               <Button
                 variant="primary"
-                onClick={() => handleValidate(selectedAttendance.id, 'approved')}
+                onClick={() => handleValidate(selectedAttendance.id, 'approved', false)}
                 loading={validating}
                 disabled={validating}
                 className="flex-1"

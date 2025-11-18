@@ -8,7 +8,6 @@ import { attendanceService } from '../../Services/attendanceService';
 import {
   MapPinIcon,
   CheckCircleIcon,
-  ExclamationTriangleIcon,
   ArrowLeftIcon
 } from '@heroicons/react/24/outline';
 
@@ -35,7 +34,7 @@ const AttendanceRegister = () => {
     setToken(qrToken);
     setType(regType || 'entry');
     
-    // Validar que el token esté en localStorage (generado por el sistema)
+    // Validar token en localStorage
     validateToken(qrToken);
   }, []);
 
@@ -71,11 +70,15 @@ const AttendanceRegister = () => {
         longitude: location.longitude,
       });
 
+      console.log('Respuesta del servidor:', response);
+
       setSuccess(true);
       setAttendanceData(response.data || response.attendance);
 
     } catch (err) {
-      console.error('Error registering attendance:', err);
+      console.error('Error completo:', err);
+      console.error('Response data:', err.response?.data);
+      
       setError(err.response?.data?.message || 'Error al registrar asistencia');
     } finally {
       setSubmitting(false);
@@ -109,27 +112,33 @@ const AttendanceRegister = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Hora:</span>
-                    <span className="font-semibold">{attendanceData.entry_time || attendanceData.exit_time}</span>
+                    <span className="font-semibold">
+                      {attendanceData.entry_time || attendanceData.exit_time}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Estado:</span>
-                    <span className={`font-semibold ${
-                      attendanceData.status === 'approved' ? 'text-green-600' : 'text-yellow-600'
-                    }`}>
-                      {attendanceData.status === 'approved' ? 'Aprobado' : 'Pendiente de Aprobación'}
+                    <span className="font-semibold text-yellow-600">
+                      Pendiente de Aprobación
                     </span>
                   </div>
+                  {attendanceData.distance_from_office && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Distancia de oficina:</span>
+                      <span className="font-semibold">
+                        {Math.round(attendanceData.distance_from_office)}m
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {attendanceData?.status === 'pending' && (
-              <Alert 
-                type="warning" 
-                message="Tu registro está pendiente de aprobación por el administrador debido a que fue realizado desde fuera de la red de oficina."
-                className="mb-6"
-              />
-            )}
+            <Alert 
+              type="warning" 
+              message="Tu registro está pendiente de aprobación por el administrador. Recibirás una notificación cuando sea revisado."
+              className="mb-6"
+            />
 
             <Button
               variant="primary"
@@ -203,15 +212,8 @@ const AttendanceRegister = () => {
               <li>• Dirección IP de conexión</li>
               <li>• Fecha y hora exacta</li>
               <li>• Token QR de verificación</li>
+              <li>• Dispositivo utilizado</li>
             </ul>
-          </div>
-
-          {/* Advertencia */}
-          <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6">
-            <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-yellow-800 text-left">
-              Si no estás en la red de oficina, tu registro requerirá aprobación del administrador.
-            </p>
           </div>
 
           {/* Botones */}

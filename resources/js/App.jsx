@@ -33,7 +33,6 @@ import Layout from './Components/Layout/Layout';
 // Hooks
 import AttendanceRegister from './Pages/Intern/AttendanceRegister';
 
-
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
 

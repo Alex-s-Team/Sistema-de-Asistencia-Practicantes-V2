@@ -11,8 +11,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class UserController extends Controller
-{
+class UserController extends Controller{
     public function index(Request $request)
     {
         try {
@@ -193,26 +192,59 @@ class UserController extends Controller
         try {
             $currentUser = $request->user();
 
-            if (!$currentUser->canManageUsers()) {
+            // Permitir que los usuarios editen su propio perfil o que los admin/staff editen otros usuarios
+            $isOwnProfile = $currentUser->id == $id;
+            
+            if (!$isOwnProfile && !$currentUser->canManageUsers()) {
                 return response()->json([
-                    'message' => 'No tienes permisos para editar usuarios',
+                    'message' => 'No tienes permisos para editar este usuario',
                 ], 403);
             }
 
             $user = User::findOrFail($id);
 
-            $validated = $request->validate([
-                'name' => 'sometimes|string|max:255',
-                'dni' => 'sometimes|string|size:8|regex:/^[0-9]{8}$/|unique:users,dni,' . $id,
-                'email' => 'sometimes|nullable|email|unique:users,email,' . $id,
-                'role' => 'sometimes|in:admin,staff,intern',
-                'gender' => 'sometimes|in:masculino,femenino',
-                'phone' => 'nullable|string',
-                'address' => 'nullable|string',
-                'district' => 'nullable|string',
-                'city' => 'nullable|string',
-                'is_active' => 'sometimes|boolean',
-            ]);
+            // Si no es admin, solo puede editar ciertos campos de su propio perfil
+            if (!$currentUser->isAdmin() && $isOwnProfile) {
+                $validated = $request->validate([
+                    'name' => 'sometimes|string|max:255',
+                    'dni' => 'sometimes|string|size:8|regex:/^[0-9]{8}$/|unique:users,dni,' . $id,
+                    'email' => 'sometimes|nullable|email|unique:users,email,' . $id,
+                    'phone' => 'nullable|string',
+                    'emergency_contact' => 'nullable|string',
+                    'address' => 'nullable|string',
+                    'district' => 'nullable|string',
+                    'city' => 'nullable|string',
+                    'university' => 'nullable|string',
+                    'semester' => 'nullable|string',
+                    'position' => 'nullable|string',
+                    'start_date' => 'nullable|date',
+                    'end_date' => 'nullable|date',
+                    'entry_time' => 'nullable|date_format:H:i',
+                    'exit_time' => 'nullable|date_format:H:i',
+                ]);
+            } else {
+                // Admin puede editar todo incluyendo el rol y estado
+                $validated = $request->validate([
+                    'name' => 'sometimes|string|max:255',
+                    'dni' => 'sometimes|string|size:8|regex:/^[0-9]{8}$/|unique:users,dni,' . $id,
+                    'email' => 'sometimes|nullable|email|unique:users,email,' . $id,
+                    'role' => 'sometimes|in:admin,staff,intern',
+                    'gender' => 'sometimes|in:masculino,femenino',
+                    'phone' => 'nullable|string',
+                    'emergency_contact' => 'nullable|string',
+                    'address' => 'nullable|string',
+                    'district' => 'nullable|string',
+                    'city' => 'nullable|string',
+                    'university' => 'nullable|string',
+                    'semester' => 'nullable|string',
+                    'position' => 'nullable|string',
+                    'start_date' => 'nullable|date',
+                    'end_date' => 'nullable|date',
+                    'entry_time' => 'nullable|date_format:H:i',
+                    'exit_time' => 'nullable|date_format:H:i',
+                    'is_active' => 'sometimes|boolean',
+                ]);
+            }
 
             $user->update($validated);
 
@@ -255,6 +287,43 @@ class UserController extends Controller
             Log::error('Error in UserController@destroy:', ['message' => $e->getMessage()]);
             return response()->json([
                 'message' => 'Error al eliminar usuario',
+            ], 500);
+        }
+    }
+
+    /**
+     * Restablecer la contraseña de un usuario (solo admin)
+     */
+    public function resetPassword(Request $request, $id)
+    {
+        try {
+            $currentUser = $request->user();
+
+            if (!$currentUser->isAdmin()) {
+                return response()->json([
+                    'message' => 'Solo los administradores pueden restablecer contraseñas',
+                ], 403);
+            }
+
+            $user = User::findOrFail($id);
+            
+            // Usar el DNI como nueva contraseña
+            $newPassword = $user->dni;
+            $user->update([
+                'password' => Hash::make($newPassword)
+            ]);
+
+            // 🔥 BROADCAST: Notificar actualización
+            broadcast(new DataUpdated('user', 'updated', $user))->toOthers();
+
+            return response()->json([
+                'message' => 'Contraseña restablecida exitosamente',
+                'new_password' => $newPassword, // Solo para mostrar en la respuesta
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error in UserController@resetPassword:', ['message' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Error al restablecer contraseña',
             ], 500);
         }
     }

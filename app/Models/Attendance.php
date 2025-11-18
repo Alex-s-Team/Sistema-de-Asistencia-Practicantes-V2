@@ -13,7 +13,8 @@ class Attendance extends Model
     protected $fillable = [
         'user_id', 'date', 'entry_time', 'exit_time',
         'entry_ip', 'exit_ip', 'entry_device', 'exit_device',
-        'entry_latitude', 'entry_longitude', 'exit_latitude', 'exit_longitude',
+        'entry_latitude', 'entry_longitude', 'exit_latitude','exit_longitude',
+        'distance_from_office', 'qr_token',
         'is_remote_entry', 'is_remote_exit', 'remote_reason',
         'status', 'validated_by', 'validated_at', 'validation_notes',
         'has_delay', 'delay_minutes',

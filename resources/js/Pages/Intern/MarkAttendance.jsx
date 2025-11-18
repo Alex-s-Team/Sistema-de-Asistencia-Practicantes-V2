@@ -109,9 +109,27 @@ const MarkAttendance = () => {
     return 'opacity-60';
   };
 
+  const getAttendanceStatus = (attendance) => {
+    if (!attendance) return null;
+    
+    switch(attendance.status) {
+      case 'approved':
+        return { color: 'green', text: 'Aprobado', icon: '✓' };
+      case 'rejected':
+        return { color: 'red', text: 'Rechazado', icon: '✗' };
+      case 'pending':
+        return { color: 'yellow', text: 'Pendiente', icon: '⏳' };
+      default:
+        return { color: 'gray', text: 'Desconocido', icon: '?' };
+    }
+  };
+
   if (loading) {
     return <LoadingSpinner message="Cargando información..." />;
   }
+
+  const entryStatus = todayAttendance?.entry_time ? getAttendanceStatus(todayAttendance) : null;
+  const exitStatus = todayAttendance?.exit_time ? getAttendanceStatus(todayAttendance) : null;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -128,6 +146,21 @@ const MarkAttendance = () => {
 
       {error && <Alert type="error" message={error} onClose={() => setError('')} />}
       {success && <Alert type="success" message={success} />}
+
+      {/* Alerta de aprobación pendiente */}
+      {todayAttendance?.status === 'pending' && (
+        <Alert 
+          type="warning" 
+          message="⏳ Tu asistencia de hoy está pendiente de aprobación por el administrador. Recibirás una notificación cuando sea revisada."
+        />
+      )}
+
+      {todayAttendance?.status === 'rejected' && (
+        <Alert 
+          type="error" 
+          message="✗ Tu asistencia fue rechazada. Contacta al administrador para más información."
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Panel Izquierdo - QR Code */}
@@ -213,10 +246,15 @@ const MarkAttendance = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Entrada:</span>
                     {todayAttendance?.entry_time ? (
-                      <span className="text-green-600 font-semibold flex items-center gap-1">
-                        <CheckCircleIcon className="h-4 w-4" />
-                        {todayAttendance.entry_time}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-${entryStatus.color}-600 font-semibold flex items-center gap-1`}>
+                          <CheckCircleIcon className="h-4 w-4" />
+                          {todayAttendance.entry_time}
+                        </span>
+                        <span className={`text-xs px-2 py-1 rounded-full bg-${entryStatus.color}-100 text-${entryStatus.color}-700`}>
+                          {entryStatus.icon} {entryStatus.text}
+                        </span>
+                      </div>
                     ) : (
                       <span className="text-gray-400">No registrada</span>
                     )}
@@ -224,10 +262,15 @@ const MarkAttendance = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Salida:</span>
                     {todayAttendance?.exit_time ? (
-                      <span className="text-green-600 font-semibold flex items-center gap-1">
-                        <CheckCircleIcon className="h-4 w-4" />
-                        {todayAttendance.exit_time}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-${exitStatus.color}-600 font-semibold flex items-center gap-1`}>
+                          <CheckCircleIcon className="h-4 w-4" />
+                          {todayAttendance.exit_time}
+                        </span>
+                        <span className={`text-xs px-2 py-1 rounded-full bg-${exitStatus.color}-100 text-${exitStatus.color}-700`}>
+                          {exitStatus.icon} {exitStatus.text}
+                        </span>
+                      </div>
                     ) : (
                       <span className="text-gray-400">No registrada</span>
                     )}
@@ -308,7 +351,7 @@ const MarkAttendance = () => {
             <ul className="text-sm text-gray-600 space-y-2">
               <li className="flex items-start gap-2">
                 <span className="text-green-600 font-bold">✓</span>
-                <span><strong>Ubicación GPS:</strong> Se verificará que estés en la oficina</span>
+                <span><strong>Ubicación GPS:</strong> Se registrará tu ubicación exacta</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-green-600 font-bold">✓</span>
@@ -320,7 +363,7 @@ const MarkAttendance = () => {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-yellow-600 font-bold">⚠</span>
-                <span><strong>Registro remoto:</strong> Si no estás en la red de oficina, tu registro requerirá aprobación del administrador</span>
+                <span><strong>Aprobación:</strong> Todos los registros requieren aprobación del administrador</span>
               </li>
             </ul>
           </div>

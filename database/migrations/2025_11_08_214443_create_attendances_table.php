@@ -26,6 +26,7 @@ return new class extends Migration
             $table->decimal('entry_longitude', 11, 8)->nullable();
             $table->decimal('exit_latitude', 10, 8)->nullable();
             $table->decimal('exit_longitude', 11, 8)->nullable();
+            $table->decimal('distance_from_office', 10, 2)->nullable();
             $table->boolean('is_remote_entry')->default(false);
             $table->boolean('is_remote_exit')->default(false);
             $table->text('remote_reason')->nullable();
