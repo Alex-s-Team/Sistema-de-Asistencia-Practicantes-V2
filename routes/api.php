@@ -21,22 +21,18 @@ Route::post('/login', [AuthController::class, 'login']);
 // Rutas protegidas
 Route::middleware(['auth:sanctum'])->group(function () {
     
+    
     // ========== AUTENTICACIÓN ==========
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
 
-    // ========== QR CODE (Solo admin y staff) ==========
-    Route::prefix('qr')->group(function () {
-        Route::get('/current', [QRController::class, 'current']);
-        Route::post('/validate', [QRController::class, 'validate']);
-    });
-
     // ========== ASISTENCIAS ==========
     Route::prefix('attendances')->group(function () {
         Route::get('/', [AttendanceController::class, 'index']);
-        Route::post('/', [AttendanceController::class, 'store']); // Marcar asistencia
+        Route::get('/today', [AttendanceController::class, 'getTodayAttendance']);
+        Route::post('/', [AttendanceController::class, 'store']);
         Route::get('/pending', [AttendanceController::class, 'pending']);
         Route::get('/stats', [AttendanceController::class, 'stats']);
         Route::post('/{id}/validate', [AttendanceController::class, 'validate']);

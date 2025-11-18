@@ -21,7 +21,14 @@ class QRController extends Controller
         try {
             $user = $request->user();
 
-            // Solo admin y staff pueden generar QR
+            // IMPORTANTE: Solo admin y staff pueden GENERAR QR
+            // Los practicantes solo lo ESCANEAN
+            if ($user->isIntern()) {
+                return response()->json([
+                    'message' => 'Los practicantes no pueden generar códigos QR. Escanea el QR mostrado por tu supervisor.',
+                ], 403);
+            }
+
             if (!$user->canManageUsers()) {
                 return response()->json([
                     'message' => 'No tienes permisos para generar códigos QR',

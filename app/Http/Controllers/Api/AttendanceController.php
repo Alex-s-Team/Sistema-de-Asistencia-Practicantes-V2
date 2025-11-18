@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Services\AttendanceValidationService;
-use App\Services\QRService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -13,12 +12,155 @@ use Carbon\Carbon;
 class AttendanceController extends Controller
 {
     protected $validationService;
-    protected $qrService;
 
-    public function __construct(AttendanceValidationService $validationService, QRService $qrService)
+    public function __construct(AttendanceValidationService $validationService)
     {
         $this->validationService = $validationService;
-        $this->qrService = $qrService;
+    }
+
+    public function store(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            if (!$user->isIntern()) {
+                return response()->json([
+                    'message' => 'Solo los practicantes pueden marcar asistencia',
+                ], 403);
+            }
+
+            $validated = $request->validate([
+                'type' => 'required|in:entry,exit',
+                'latitude' => 'required|numeric',
+                'longitude' => 'required|numeric',
+                'qr_token' => 'required|string',
+                'remote_reason' => 'nullable|string',
+            ]);
+
+            // Obtener IP del usuario
+            $ipAddress = $request->ip();
+            
+            // Validar ubicación y red
+            $validation = $this->validationService->validateAttendanceConditions(
+                $user->id,
+                $validated['latitude'],
+                $validated['longitude'],
+                $ipAddress
+            );
+
+            Log::info('Attendance validation:', [
+                'user' => $user->id,
+                'ip' => $ipAddress,
+                'validation' => $validation
+            ]);
+
+            // Si no está en la red permitida Y no proporcionó razón, solicitar razón
+            if (!$validation['is_valid_network'] && !$validated['remote_reason']) {
+                return response()->json([
+                    'message' => 'Debes justificar el registro desde fuera de la red de oficina',
+                    'requires_remote_reason' => true,
+                    'validation' => $validation
+                ], 422);
+            }
+
+            // Verificar registro del día
+            $today = Carbon::today();
+            $existingAttendance = Attendance::where('user_id', $user->id)
+                ->whereDate('date', $today)
+                ->first();
+
+            if ($validated['type'] === 'entry') {
+                if ($existingAttendance && $existingAttendance->entry_time) {
+                    return response()->json([
+                        'message' => 'Ya has registrado tu entrada hoy',
+                    ], 422);
+                }
+
+                $entryTime = now()->format('H:i:s');
+                $hasDelay = false;
+                
+                if ($user->entry_time) {
+                    $expectedTime = Carbon::createFromFormat('H:i:s', $user->entry_time);
+                    $actualTime = Carbon::createFromFormat('H:i:s', $entryTime);
+                    $hasDelay = $actualTime->greaterThan($expectedTime);
+                }
+
+                $attendanceData = [
+                    'entry_time' => $entryTime,
+                    'entry_latitude' => $validated['latitude'],
+                    'entry_longitude' => $validated['longitude'],
+                    'entry_ip' => $ipAddress,
+                    'has_delay' => $hasDelay,
+                    'is_remote_entry' => !$validation['is_valid_network'] || !$validation['is_valid_location'],
+                    'remote_entry_reason' => $validated['remote_reason'] ?? null,
+                    'qr_token' => $validated['qr_token'],
+                    'status' => $validation['requires_approval'] ? 'pending' : 'approved',
+                ];
+
+                if ($existingAttendance) {
+                    $existingAttendance->update($attendanceData);
+                    $attendance = $existingAttendance;
+                } else {
+                    $attendance = Attendance::create(array_merge([
+                        'user_id' => $user->id,
+                        'date' => $today,
+                    ], $attendanceData));
+                }
+
+                $message = $validation['requires_approval'] 
+                    ? 'Entrada registrada. Requiere aprobación del administrador.' 
+                    : 'Entrada registrada exitosamente';
+
+                return response()->json([
+                    'message' => $message,
+                    'attendance' => $attendance,
+                    'validation' => $validation,
+                ], 201);
+
+            } else { // exit
+                if (!$existingAttendance || !$existingAttendance->entry_time) {
+                    return response()->json([
+                        'message' => 'Debes registrar tu entrada primero',
+                    ], 422);
+                }
+
+                if ($existingAttendance->exit_time) {
+                    return response()->json([
+                        'message' => 'Ya has registrado tu salida hoy',
+                    ], 422);
+                }
+
+                $existingAttendance->update([
+                    'exit_time' => now()->format('H:i:s'),
+                    'exit_latitude' => $validated['latitude'],
+                    'exit_longitude' => $validated['longitude'],
+                    'exit_ip' => $ipAddress,
+                    'is_remote_exit' => !$validation['is_valid_network'] || !$validation['is_valid_location'],
+                    'remote_exit_reason' => $validated['remote_reason'] ?? null,
+                ]);
+
+                return response()->json([
+                    'message' => 'Salida registrada exitosamente',
+                    'attendance' => $existingAttendance,
+                    'validation' => $validation,
+                ]);
+            }
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Error de validación',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error in AttendanceController@store:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Error al registrar asistencia',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function index(Request $request)
@@ -80,142 +222,6 @@ class AttendanceController extends Controller
             return response()->json([
                 'message' => 'Error al obtener asistencias pendientes',
                 'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    public function store(Request $request)
-    {
-        try {
-            $user = $request->user();
-
-            if (!$user->isIntern()) {
-                return response()->json([
-                    'message' => 'Solo los practicantes pueden marcar asistencia',
-                ], 403);
-            }
-
-            $validated = $request->validate([
-                'type' => 'required|in:entry,exit',
-                'latitude' => 'required|numeric',
-                'longitude' => 'required|numeric',
-                'qr_token' => 'required|string',
-                'remote_reason' => 'nullable|string',
-            ]);
-
-            // Validar QR
-            $qrValidation = $this->qrService->validateToken($validated['qr_token']);
-            if (!$qrValidation['valid']) {
-                return response()->json([
-                    'message' => $qrValidation['message'],
-                ], 422);
-            }
-
-            // Marcar QR como usado
-            if (isset($qrValidation['token'])) {
-                $qrValidation['token']->update([
-                    'used_by' => $user->id,
-                    'used_at' => now()
-                ]);
-            }
-
-            // Validar condiciones
-            $ipAddress = $request->ip();
-            $validation = $this->validationService->validateAttendanceConditions(
-                $user->id,
-                $validated['latitude'],
-                $validated['longitude'],
-                $ipAddress
-            );
-
-            // Verificar registro del día
-            $today = Carbon::today();
-            $existingAttendance = Attendance::where('user_id', $user->id)
-                ->whereDate('date', $today)
-                ->first();
-
-            if ($validated['type'] === 'entry') {
-                if ($existingAttendance && $existingAttendance->entry_time) {
-                    return response()->json([
-                        'message' => 'Ya has registrado tu entrada hoy',
-                    ], 422);
-                }
-
-                $entryTime = now()->format('H:i:s');
-                $hasDelay = $user->entry_time && $entryTime > $user->entry_time;
-
-                $attendanceData = [
-                    'entry_time' => $entryTime,
-                    'entry_latitude' => $validated['latitude'],
-                    'entry_longitude' => $validated['longitude'],
-                    'entry_ip' => $ipAddress,
-                    'has_delay' => $hasDelay,
-                    'is_remote_entry' => !$validation['is_valid_network'] || !$validation['is_valid_location'],
-                    'remote_entry_reason' => $validated['remote_reason'] ?? null,
-                    'status' => $validation['requires_approval'] ? 'pending' : 'approved',
-                ];
-
-                if ($existingAttendance) {
-                    $existingAttendance->update($attendanceData);
-                    $attendance = $existingAttendance;
-                } else {
-                    $attendance = Attendance::create(array_merge([
-                        'user_id' => $user->id,
-                        'date' => $today,
-                    ], $attendanceData));
-                }
-
-                return response()->json([
-                    'message' => $validation['requires_approval'] 
-                        ? 'Entrada registrada. Requiere aprobación del supervisor.'
-                        : 'Entrada registrada exitosamente',
-                    'attendance' => $attendance,
-                    'validation' => $validation,
-                    'requires_remote_reason' => !$validation['is_valid_network'] && !$validated['remote_reason'],
-                ], 201);
-
-            } else { // exit
-                if (!$existingAttendance || !$existingAttendance->entry_time) {
-                    return response()->json([
-                        'message' => 'Debes registrar tu entrada primero',
-                    ], 422);
-                }
-
-                if ($existingAttendance->exit_time) {
-                    return response()->json([
-                        'message' => 'Ya has registrado tu salida hoy',
-                    ], 422);
-                }
-
-                $existingAttendance->update([
-                    'exit_time' => now()->format('H:i:s'),
-                    'exit_latitude' => $validated['latitude'],
-                    'exit_longitude' => $validated['longitude'],
-                    'exit_ip' => $ipAddress,
-                    'is_remote_exit' => !$validation['is_valid_network'] || !$validation['is_valid_location'],
-                    'remote_exit_reason' => $validated['remote_reason'] ?? null,
-                ]);
-
-                return response()->json([
-                    'message' => 'Salida registrada exitosamente',
-                    'attendance' => $existingAttendance,
-                    'validation' => $validation,
-                ]);
-            }
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'message' => 'Error de validación',
-                'errors' => $e->errors(),
-            ], 422);
-        } catch (\Exception $e) {
-            Log::error('Error in AttendanceController@store:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return response()->json([
-                'message' => 'Error al registrar asistencia',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -315,6 +321,25 @@ class AttendanceController extends Controller
                 'message' => 'Error al obtener estadísticas',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    public function getTodayAttendance(Request $request)
+    {
+        try {
+            $user = $request->user();
+            $today = Carbon::today();
+            
+            $attendance = Attendance::where('user_id', $user->id)
+                ->whereDate('date', $today)
+                ->first();
+
+            return response()->json([
+                'data' => $attendance
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error getting today attendance:', ['message' => $e->getMessage()]);
+            return response()->json(['data' => null]);
         }
     }
 }

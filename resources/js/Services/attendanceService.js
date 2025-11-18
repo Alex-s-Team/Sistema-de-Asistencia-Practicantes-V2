@@ -1,11 +1,14 @@
-// resources/js/Services/attendanceService.js
 import api from './api';
 
 export const attendanceService = {
   getAttendances: async (params = {}) => {
     const response = await api.get('/attendances', { params });
-    console.log('getAttendances response:', response.data);
-    return response.data; // Array directamente
+    return response.data;
+  },
+
+  getTodayAttendance: async () => {
+    const response = await api.get('/attendances/today');
+    return response.data;
   },
 
   markAttendance: async (data) => {
@@ -20,8 +23,7 @@ export const attendanceService = {
 
   getPending: async () => {
     const response = await api.get('/attendances/pending');
-    console.log('getPending response:', response.data);
-    return response.data; // Array directamente
+    return response.data;
   },
 
   getStats: async (params = {}) => {

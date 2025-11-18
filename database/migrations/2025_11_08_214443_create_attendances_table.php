@@ -19,6 +19,7 @@ return new class extends Migration
             $table->time('exit_time')->nullable();
             $table->string('entry_ip')->nullable();
             $table->string('exit_ip')->nullable();
+            $table->string('qr_token')->nullable();
             $table->string('entry_device')->nullable();
             $table->string('exit_device')->nullable();
             $table->decimal('entry_latitude', 10, 8)->nullable();

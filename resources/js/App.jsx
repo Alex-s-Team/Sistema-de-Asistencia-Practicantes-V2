@@ -30,6 +30,10 @@ import ChatPage from './Pages/Chat/ChatPage';
 // Layout
 import Layout from './Components/Layout/Layout';
 
+// Hooks
+import AttendanceRegister from './Pages/Intern/AttendanceRegister';
+
+
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
 
@@ -175,6 +179,7 @@ const AppRoutes = () => {
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/attendance-register" element={<AttendanceRegister />} />
     </Routes>
   );
 };

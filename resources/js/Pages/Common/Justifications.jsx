@@ -14,7 +14,6 @@ import {
   XCircleIcon,
   ClockIcon,
   PaperClipIcon,
-  ChatBubbleLeftIcon,
   PlusIcon
 } from '@heroicons/react/24/outline';
 
@@ -30,7 +29,7 @@ const Justifications = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
-    type: 'absence',
+    type: '',
     date: '',
     reason: '',
     custom_reason: '',
@@ -60,9 +59,16 @@ const Justifications = () => {
   };
 
   useEffect(() => {
-    // Obtener rol del usuario desde localStorage o contexto
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    setUserRole(user.role || 'intern');
+    // Obtener rol del usuario desde localStorage
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setUserRole(user.role || 'intern');
+      } catch (e) {
+        console.error('Error parsing user:', e);
+      }
+    }
     loadJustifications();
   }, []);
 
@@ -70,7 +76,10 @@ const Justifications = () => {
     try {
       setLoading(true);
       const response = await justificationService.getJustifications();
-      setJustifications(Array.isArray(response) ? response : response.data || []);
+      console.log('Justifications response:', response);
+      
+      const data = Array.isArray(response) ? response : response.data || [];
+      setJustifications(data);
     } catch (error) {
       console.error('Error loading justifications:', error);
       setMessage({ type: 'error', text: 'Error al cargar justificaciones' });
@@ -85,21 +94,39 @@ const Justifications = () => {
   };
 
   const handleFileChange = (e) => {
-    setFormData(prev => ({ ...prev, document: e.target.files[0] }));
+    const file = e.target.files[0];
+    setFormData(prev => ({ ...prev, document: file }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
+  const handleSubmit = async () => {
     try {
+      // Validar campos requeridos
+      if (!formData.type) {
+        setMessage({ type: 'error', text: 'Debes seleccionar el tipo de justificación' });
+        return;
+      }
+      if (!formData.date) {
+        setMessage({ type: 'error', text: 'Debes seleccionar la fecha' });
+        return;
+      }
+      if (!formData.reason) {
+        setMessage({ type: 'error', text: 'Debes seleccionar un motivo' });
+        return;
+      }
+      if (formData.reason === 'otros' && !formData.custom_reason) {
+        setMessage({ type: 'error', text: 'Debes especificar el motivo' });
+        return;
+      }
+
       setSubmitting(true);
+      
       const submitData = new FormData();
       submitData.append('type', formData.type);
       submitData.append('date', formData.date);
       
       const reasonText = formData.reason === 'otros' 
         ? formData.custom_reason 
-        : quickReasons[formData.type].find(r => r.value === formData.reason)?.label || formData.reason;
+        : quickReasons[formData.type]?.find(r => r.value === formData.reason)?.label || formData.reason;
       
       submitData.append('reason', reasonText);
       
@@ -107,12 +134,19 @@ const Justifications = () => {
         submitData.append('document', formData.document);
       }
 
+      console.log('Submitting justification:', {
+        type: formData.type,
+        date: formData.date,
+        reason: reasonText
+      });
+
       await justificationService.createJustification(submitData);
       setMessage({ type: 'success', text: 'Justificación enviada correctamente' });
       setShowModal(false);
       resetForm();
       await loadJustifications();
     } catch (error) {
+      console.error('Error submitting justification:', error);
       setMessage({
         type: 'error',
         text: error.response?.data?.message || 'Error al enviar justificación'
@@ -151,7 +185,7 @@ const Justifications = () => {
 
   const resetForm = () => {
     setFormData({
-      type: 'absence',
+      type: '',
       date: '',
       reason: '',
       custom_reason: '',
@@ -187,9 +221,12 @@ const Justifications = () => {
           <p className="text-gray-600 mt-1">
             {userRole === 'intern' 
               ? 'Envía justificaciones por faltas o tardanzas' 
-              : 'Revisa y aprueba las justificaciones'}
+              : userRole === 'admin'
+              ? 'Revisa y aprueba las justificaciones'
+              : 'Visualiza las justificaciones del equipo'}
           </p>
         </div>
+        {/* Solo practicantes pueden crear justificaciones */}
         {userRole === 'intern' && (
           <Button variant="primary" onClick={() => setShowModal(true)}>
             <PlusIcon className="h-5 w-5 mr-2" />
@@ -330,7 +367,8 @@ const Justifications = () => {
                     </div>
                   )}
 
-                  {userRole !== 'intern' && justification.status === 'pending' && (
+                  {/* Solo ADMIN puede aprobar/rechazar, STAFF solo visualiza */}
+                  {userRole === 'admin' && justification.status === 'pending' && (
                     <div className="flex gap-2 mt-4">
                       <Button
                         variant="primary"
@@ -349,6 +387,7 @@ const Justifications = () => {
         </div>
       )}
 
+      {/* Modal para crear justificación (solo practicantes) */}
       <Modal
         isOpen={showModal}
         onClose={() => {
@@ -366,6 +405,7 @@ const Justifications = () => {
             onChange={handleInputChange}
             required
           >
+            <option value="">Selecciona un tipo</option>
             <option value="absence">Falta</option>
             <option value="delay">Tardanza</option>
           </Select>
@@ -379,20 +419,22 @@ const Justifications = () => {
             required
           />
 
-          <Select
-            label="Motivo"
-            name="reason"
-            value={formData.reason}
-            onChange={handleInputChange}
-            required
-          >
-            <option value="">Selecciona un motivo</option>
-            {quickReasons[formData.type].map(reason => (
-              <option key={reason.value} value={reason.value}>
-                {reason.label}
-              </option>
-            ))}
-          </Select>
+          {formData.type && (
+            <Select
+              label="Motivo"
+              name="reason"
+              value={formData.reason}
+              onChange={handleInputChange}
+              required
+            >
+              <option value="">Selecciona un motivo</option>
+              {quickReasons[formData.type]?.map(reason => (
+                <option key={reason.value} value={reason.value}>
+                  {reason.label}
+                </option>
+              ))}
+            </Select>
+          )}
 
           {formData.reason === 'otros' && (
             <div>
@@ -454,6 +496,7 @@ const Justifications = () => {
         </div>
       </Modal>
 
+      {/* Modal para revisar justificación (solo admin) */}
       <Modal
         isOpen={showReviewModal}
         onClose={() => {

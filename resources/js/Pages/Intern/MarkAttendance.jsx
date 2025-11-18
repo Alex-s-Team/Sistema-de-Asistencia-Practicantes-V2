@@ -1,164 +1,127 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card } from '../../Components/Common/Card';
 import { Button } from '../../Components/Common/Button';
-import { Input } from '../../Components/Common/Input';
 import { Alert } from '../../Components/Common/Alert';
 import { LoadingSpinner } from '../../Components/Common/LoadingSpinner';
-import { Modal } from '../../Components/Common/Modal';
-import { useGeolocation } from '../../Hooks/useGeolocation';
-import { qrService } from '../../Services/qrService';
-import { attendanceService } from '../../Services/attendanceService';
 import { QRCodeSVG } from 'qrcode.react';
+import { attendanceService } from '../../Services/attendanceService';
 import { 
-  MapPinIcon, 
   QrCodeIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
   ClockIcon,
-  LinkIcon,
-  ArrowPathIcon
+  CheckCircleIcon,
+  ArrowPathIcon,
+  ComputerDesktopIcon,
+  DevicePhoneMobileIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 
 const MarkAttendance = () => {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const tokenFromUrl = searchParams.get('token');
-  
-  const { location, error: locationError, loading: locationLoading, getCurrentPosition } = useGeolocation();
-
-  const [qrData, setQrData] = useState(null);
-  const [qrLoading, setQrLoading] = useState(false);
-  const [attendanceType, setAttendanceType] = useState(null);
-  const [showQR, setShowQR] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [qrToken, setQrToken] = useState(null);
+  const [timeRemaining, setTimeRemaining] = useState(30);
+  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [showRemoteModal, setShowRemoteModal] = useState(false);
-  const [remoteReason, setRemoteReason] = useState('');
-  const [timeRemaining, setTimeRemaining] = useState(30);
-
-  // Si viene token en URL, auto-abrir modal
-  useEffect(() => {
-    if (tokenFromUrl) {
-      handleStartAttendance('entry');
-    }
-  }, [tokenFromUrl]);
 
   useEffect(() => {
-    if (showQR) {
-      loadQRCode();
-      const interval = setInterval(loadQRCode, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [showQR]);
+    checkTodayAttendance();
+    generateQRToken();
+    const interval = setInterval(generateQRToken, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
-    if (showQR && qrData) {
+    if (qrToken) {
       const interval = setInterval(() => {
-        const now = new Date();
-        const expiresAt = new Date(qrData.expires_at);
-        const diff = Math.floor((expiresAt - now) / 1000);
+        const now = Date.now();
+        const diff = Math.floor((qrToken.expiresAt - now) / 1000);
         setTimeRemaining(diff > 0 ? diff : 0);
         
         if (diff <= 0) {
-          loadQRCode();
+          generateQRToken();
         }
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [showQR, qrData]);
+  }, [qrToken]);
 
-  const loadQRCode = async () => {
+  const checkTodayAttendance = async () => {
     try {
-      setQrLoading(true);
-      const data = await qrService.getCurrentQR();
-      setQrData(data);
-    } catch (err) {
-      console.error('Error loading QR:', err);
-      setError('Error al cargar el código QR');
+      setLoading(true);
+      const response = await attendanceService.getTodayAttendance();
+      setTodayAttendance(response.data);
+    } catch (error) {
+      console.error('Error checking attendance:', error);
     } finally {
-      setQrLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleStartAttendance = (type) => {
-    setAttendanceType(type);
-    setError('');
-    setSuccess('');
-    getCurrentPosition();
-    setShowQR(true);
+  const generateQRToken = () => {
+    const token = `QR-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const expiresAt = Date.now() + 30000;
+    
+    setQrToken({
+      token: token,
+      expiresAt: expiresAt
+    });
+
+    // Guardar en localStorage para validación
+    localStorage.setItem('valid_qr_tokens', JSON.stringify([
+      ...(JSON.parse(localStorage.getItem('valid_qr_tokens') || '[]')),
+      { token, expiresAt }
+    ].slice(-10))); // Mantener últimos 10 tokens
   };
 
-  const handleCopyLink = () => {
-    if (qrData?.qr_url) {
-      navigator.clipboard.writeText(qrData.qr_url);
-      setSuccess('Link copiado al portapapeles');
-      setTimeout(() => setSuccess(''), 2000);
-    }
+  const getQRUrl = () => {
+    return `${window.location.origin}/attendance-register?token=${qrToken?.token}`;
   };
 
-  const handleSubmitAttendance = async () => {
-    if (!location) {
-      setError('Debes permitir el acceso a tu ubicación');
-      return;
-    }
-
-    if (!qrData) {
-      setError('Código QR no disponible');
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      setError('');
-
-      const response = await attendanceService.markAttendance({
-        qr_token: tokenFromUrl || qrData.token,
-        type: attendanceType,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        remote_reason: remoteReason || null,
-      });
-
-      setSuccess(response.message);
-      setShowQR(false);
-
-      setTimeout(() => {
-        navigate('/');
-      }, 2000);
-
-    } catch (err) {
-      const errorMsg = err.response?.data?.message || 'Error al registrar asistencia';
-      setError(errorMsg);
-      
-      // Si requiere justificación remota
-      if (err.response?.data?.requires_remote_reason && !remoteReason) {
-        setShowRemoteModal(true);
-      }
-    } finally {
-      setSubmitting(false);
-    }
+  const handleDirectRegister = (type) => {
+    window.location.href = `/attendance-register?token=${qrToken?.token}&type=${type}`;
   };
 
-  const handleSubmitRemote = async () => {
-    if (!remoteReason.trim()) {
-      setError('Debes especificar el motivo del registro remoto');
-      return;
-    }
-    setShowRemoteModal(false);
-    await handleSubmitAttendance();
+  const canRegisterEntry = () => {
+    return !todayAttendance?.entry_time;
   };
+
+  const canRegisterExit = () => {
+    if (!todayAttendance?.entry_time) return false;
+    if (todayAttendance?.exit_time) return false;
+    
+    // Verificar si ya es casi hora de salida (12:50 PM = 12.83 horas)
+    const now = new Date();
+    const currentHour = now.getHours() + now.getMinutes() / 60;
+    return currentHour >= 12.83; // 12:50 PM
+  };
+
+  const getExitButtonOpacity = () => {
+    if (!todayAttendance?.entry_time || todayAttendance?.exit_time) {
+      return 'opacity-40 cursor-not-allowed';
+    }
+    
+    const now = new Date();
+    const currentHour = now.getHours() + now.getMinutes() / 60;
+    
+    if (currentHour >= 12.83) {
+      return 'opacity-100';
+    }
+    return 'opacity-60';
+  };
+
+  if (loading) {
+    return <LoadingSpinner message="Cargando información..." />;
+  }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       <Card>
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Marcar Asistencia
+            Registro de Asistencia
           </h1>
           <p className="text-gray-600">
-            Selecciona si deseas marcar tu entrada o salida
+            Escanea el código QR o haz clic en el botón para registrar tu asistencia
           </p>
         </div>
       </Card>
@@ -166,229 +129,199 @@ const MarkAttendance = () => {
       {error && <Alert type="error" message={error} onClose={() => setError('')} />}
       {success && <Alert type="success" message={success} />}
 
-      {!showQR && !tokenFromUrl && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="text-center hover:shadow-lg transition-shadow">
-            <ClockIcon className="h-20 w-20 text-primary-500 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              Marcar Entrada
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Registra tu llegada a la oficina
-            </p>
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={() => handleStartAttendance('entry')}
-              className="w-full"
-            >
-              Marcar Entrada
-            </Button>
-          </Card>
-
-          <Card className="text-center hover:shadow-lg transition-shadow">
-            <CheckCircleIcon className="h-20 w-20 text-secondary-500 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              Marcar Salida
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Registra tu salida de la oficina
-            </p>
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => handleStartAttendance('exit')}
-              className="w-full"
-            >
-              Marcar Salida
-            </Button>
-          </Card>
-        </div>
-      )}
-
-      {showQR && (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Panel Izquierdo - QR Code */}
         <Card>
-          <div className="space-y-6">
-            <div className={`p-4 rounded-lg border-2 ${
-              location 
-                ? 'bg-green-50 border-green-200' 
-                : locationLoading 
-                ? 'bg-blue-50 border-blue-200'
-                : 'bg-red-50 border-red-200'
-            }`}>
-              <div className="flex items-center gap-3">
-                <MapPinIcon className={`h-6 w-6 ${
-                  location ? 'text-green-600' : locationLoading ? 'text-blue-600' : 'text-red-600'
-                }`} />
-                <div className="flex-1">
-                  <h4 className="font-semibold text-gray-900">
-                    {location 
-                      ? '✓ Ubicación obtenida' 
-                      : locationLoading 
-                      ? 'Obteniendo ubicación...'
-                      : '✗ Error al obtener ubicación'
-                    }
-                  </h4>
-                  {location && (
-                    <p className="text-sm text-gray-600">
-                      Lat: {location.latitude.toFixed(6)}, Lng: {location.longitude.toFixed(6)}
-                    </p>
-                  )}
-                  {locationError && (
-                    <p className="text-sm text-red-600">{locationError}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="text-center">
-              <div className="inline-block p-6 bg-white rounded-lg shadow-lg">
-                {qrLoading ? (
-                  <LoadingSpinner message="Cargando código QR..." />
-                ) : qrData ? (
-                  <>
-                    <QRCodeSVG
-                      value={qrData.qr_url}
-                      size={300}
-                      level="H"
-                      includeMargin
-                    />
-                    <div className="mt-4 p-3 bg-gray-100 rounded">
-                      <p className="text-sm font-medium text-gray-700">
-                        Código válido por: {timeRemaining}s
-                      </p>
-                      <div className="mt-2 w-full bg-gray-300 rounded-full h-2">
-                        <div
-                          className="bg-primary-500 h-2 rounded-full transition-all duration-1000"
-                          style={{ width: `${(timeRemaining / 30) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 space-y-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCopyLink}
-                        className="w-full"
-                      >
-                        <LinkIcon className="h-4 w-4 mr-2" />
-                        Copiar Link del QR
-                      </Button>
-                      <p className="text-xs text-gray-500">
-                        Si tu celular no escanea, copia el link
+          <div className="text-center">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">
+              <DevicePhoneMobileIcon className="h-6 w-6 inline mr-2" />
+              Escanea con tu Celular
+            </h3>
+            
+            <div className="inline-block p-6 bg-white rounded-2xl shadow-2xl">
+              {qrToken ? (
+                <>
+                  <QRCodeSVG
+                    value={getQRUrl()}
+                    size={280}
+                    level="H"
+                    includeMargin
+                  />
+                  <div className="mt-4 p-3 bg-gray-100 rounded-lg">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <ClockIcon className="h-5 w-5 text-gray-700" />
+                      <p className="text-sm font-semibold text-gray-900">
+                        Válido por: {timeRemaining}s
                       </p>
                     </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={loadQRCode}
-                      className="w-full mt-2"
-                    >
-                      <ArrowPathIcon className="h-4 w-4 mr-2" />
-                      Renovar QR
-                    </Button>
-                  </>
-                ) : (
-                  <div className="text-gray-500">
-                    <QrCodeIcon className="h-20 w-20 mx-auto mb-2" />
-                    <p>No se pudo cargar el QR</p>
+                    <div className="w-full bg-gray-300 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-1000 ${
+                          timeRemaining > 15 ? 'bg-green-500' : 
+                          timeRemaining > 5 ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${(timeRemaining / 30) * 100}%` }}
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
+                </>
+              ) : (
+                <div className="text-gray-500">
+                  <QrCodeIcon className="h-32 w-32 mx-auto mb-4" />
+                  <p>Generando código QR...</p>
+                </div>
+              )}
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="font-semibold text-blue-900 mb-2">Instrucciones:</h4>
-              <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800">
-                <li>Asegúrate de estar en la oficina o explica el motivo si estás en otro lugar</li>
-                <li>Escanea el QR con tu celular o copia el link</li>
-                <li>El código QR se renueva cada 30 segundos por seguridad</li>
-                <li>Presiona "Confirmar {attendanceType === 'entry' ? 'Entrada' : 'Salida'}" cuando estés listo</li>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={generateQRToken}
+              className="mt-4"
+            >
+              <ArrowPathIcon className="h-4 w-4 mr-2" />
+              Renovar QR
+            </Button>
+
+            <div className="mt-6 text-left bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-900 font-semibold mb-2">
+                Instrucciones para celular:
+              </p>
+              <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+                <li>Abre la cámara de tu celular</li>
+                <li>Apunta al código QR</li>
+                <li>Haz clic en el enlace que aparece</li>
+                <li>Se abrirá una página para registrar tu asistencia</li>
               </ol>
-            </div>
-
-            <div className="flex gap-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowQR(false);
-                  setAttendanceType(null);
-                  setRemoteReason('');
-                }}
-                disabled={submitting}
-                className="flex-1"
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleSubmitAttendance}
-                loading={submitting}
-                disabled={!location || !qrData || submitting}
-                className="flex-1"
-              >
-                Confirmar {attendanceType === 'entry' ? 'Entrada' : 'Salida'}
-              </Button>
             </div>
           </div>
         </Card>
-      )}
 
-      <Modal
-        isOpen={showRemoteModal}
-        onClose={() => setShowRemoteModal(false)}
-        title="Registro Remoto"
-        size="md"
-      >
-        <div className="space-y-4">
-          <Alert
-            type="warning"
-            message="Has iniciado sesión desde fuera de la red de la oficina. Por favor, justifica el motivo del registro remoto."
-          />
+        {/* Panel Derecho - Botones Directos */}
+        <Card>
+          <div className="text-center">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">
+              <ComputerDesktopIcon className="h-6 w-6 inline mr-2" />
+              Registro desde Computadora
+            </h3>
 
-          <Input
-            label="Motivo del registro remoto"
-            placeholder="Ej: Cita médica, trabajo desde casa autorizado, etc."
-            value={remoteReason}
-            onChange={(e) => setRemoteReason(e.target.value)}
-            required
-          />
+            <div className="space-y-4">
+              {/* Estado actual */}
+              <div className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
+                <p className="text-sm text-gray-600 mb-2">Estado de hoy:</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Entrada:</span>
+                    {todayAttendance?.entry_time ? (
+                      <span className="text-green-600 font-semibold flex items-center gap-1">
+                        <CheckCircleIcon className="h-4 w-4" />
+                        {todayAttendance.entry_time}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">No registrada</span>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Salida:</span>
+                    {todayAttendance?.exit_time ? (
+                      <span className="text-green-600 font-semibold flex items-center gap-1">
+                        <CheckCircleIcon className="h-4 w-4" />
+                        {todayAttendance.exit_time}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">No registrada</span>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-          <div className="flex gap-4">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowRemoteModal(false);
-                setRemoteReason('');
-              }}
-              className="flex-1"
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleSubmitRemote}
-              disabled={!remoteReason.trim()}
-              className="flex-1"
-            >
-              Confirmar Registro
-            </Button>
+              {/* Botón de Entrada */}
+              <div>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => handleDirectRegister('entry')}
+                  disabled={!canRegisterEntry()}
+                  className="w-full"
+                >
+                  <ClockIcon className="h-6 w-6 mr-2" />
+                  {todayAttendance?.entry_time ? 'Entrada Registrada' : 'Registrar Entrada'}
+                </Button>
+                {todayAttendance?.entry_time && (
+                  <p className="text-xs text-green-600 mt-1">
+                    ✓ Ya registraste tu entrada hoy
+                  </p>
+                )}
+              </div>
+
+              {/* Botón de Salida */}
+              <div>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => handleDirectRegister('exit')}
+                  disabled={!canRegisterExit()}
+                  className={`w-full ${getExitButtonOpacity()}`}
+                >
+                  <CheckCircleIcon className="h-6 w-6 mr-2" />
+                  {todayAttendance?.exit_time ? 'Salida Registrada' : 'Registrar Salida'}
+                </Button>
+                {!todayAttendance?.entry_time && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Debes registrar tu entrada primero
+                  </p>
+                )}
+                {todayAttendance?.entry_time && !todayAttendance?.exit_time && !canRegisterExit() && (
+                  <p className="text-xs text-yellow-600 mt-1">
+                    Disponible desde las 12:50 PM
+                  </p>
+                )}
+                {todayAttendance?.exit_time && (
+                  <p className="text-xs text-green-600 mt-1">
+                    ✓ Ya registraste tu salida hoy
+                  </p>
+                )}
+              </div>
+
+              <div className="text-left bg-purple-50 border border-purple-200 rounded-lg p-4 mt-6">
+                <p className="text-sm text-purple-900 font-semibold mb-2">
+                  Instrucciones para computadora:
+                </p>
+                <ol className="text-xs text-purple-800 space-y-1 list-decimal list-inside">
+                  <li>Haz clic en el botón correspondiente (Entrada/Salida)</li>
+                  <li>Se abrirá una nueva página para confirmar</li>
+                  <li>El sistema detectará tu ubicación e IP automáticamente</li>
+                  <li>Confirma el registro y regresa aquí</li>
+                </ol>
+              </div>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Card>
+      </div>
 
+      {/* Información de Seguridad */}
       <Card>
         <div className="flex items-start gap-4">
           <ExclamationTriangleIcon className="h-8 w-8 text-yellow-500 flex-shrink-0" />
           <div>
-            <h4 className="font-semibold text-gray-900 mb-2">Importante</h4>
-            <ul className="text-sm text-gray-600 space-y-1">
-              <li>• Solo puedes marcar asistencia una vez por día (entrada y salida)</li>
-              <li>• Los registros fuera de la red requieren aprobación del supervisor</li>
-              <li>• Si llegas tarde, el sistema calculará automáticamente el retraso</li>
-              <li>• Puedes justificar ausencias y retrasos desde la sección de justificaciones</li>
+            <h4 className="font-semibold text-gray-900 mb-2">Sistema de Seguridad Activo</h4>
+            <ul className="text-sm text-gray-600 space-y-2">
+              <li className="flex items-start gap-2">
+                <span className="text-green-600 font-bold">✓</span>
+                <span><strong>Ubicación GPS:</strong> Se verificará que estés en la oficina</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-green-600 font-bold">✓</span>
+                <span><strong>Dirección IP:</strong> Se registrará tu IP de conexión</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-green-600 font-bold">✓</span>
+                <span><strong>Token QR:</strong> Único y temporal (30 segundos)</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-yellow-600 font-bold">⚠</span>
+                <span><strong>Registro remoto:</strong> Si no estás en la red de oficina, tu registro requerirá aprobación del administrador</span>
+              </li>
             </ul>
           </div>
         </div>

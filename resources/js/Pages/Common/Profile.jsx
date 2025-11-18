@@ -44,15 +44,20 @@ const Profile = () => {
     try {
       setLoading(true);
       const response = await authService.getProfile();
-      setUser(response.data);
+      console.log('Profile response:', response);
+      
+      // La respuesta puede venir como response.data o response.user
+      const userData = response.data || response.user || response;
+      
+      setUser(userData);
       setProfileData({
-        name: response.data.name || '',
-        email: response.data.email || '',
-        phone: response.data.phone || '',
-        address: response.data.address || '',
-        district: response.data.district || '',
-        city: response.data.city || '',
-        emergency_contact: response.data.emergency_contact || ''
+        name: userData.name || '',
+        email: userData.email || '',
+        phone: userData.phone || '',
+        address: userData.address || '',
+        district: userData.district || '',
+        city: userData.city || '',
+        emergency_contact: userData.emergency_contact || ''
       });
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -116,6 +121,14 @@ const Profile = () => {
     return <LoadingSpinner message="Cargando perfil..." />;
   }
 
+  if (!user) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <Alert type="error" message="No se pudo cargar el perfil del usuario" />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
@@ -139,33 +152,33 @@ const Profile = () => {
             <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-primary-100 mb-4">
               <UserCircleIcon className="h-20 w-20 text-primary-600" />
             </div>
-            <h3 className="text-xl font-semibold text-gray-900">{user?.name}</h3>
-            <p className="text-sm text-gray-600 mt-1">{user?.email}</p>
+            <h3 className="text-xl font-semibold text-gray-900">{user.name}</h3>
+            <p className="text-sm text-gray-600 mt-1">{user.email || 'Sin email'}</p>
             <div className="mt-4">
               <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                user?.role === 'admin' ? 'bg-red-100 text-red-800' :
-                user?.role === 'staff' ? 'bg-blue-100 text-blue-800' :
+                user.role === 'admin' ? 'bg-red-100 text-red-800' :
+                user.role === 'staff' ? 'bg-blue-100 text-blue-800' :
                 'bg-green-100 text-green-800'
               }`}>
-                {user?.role === 'admin' ? 'Administrador' :
-                 user?.role === 'staff' ? 'Personal' : 'Practicante'}
+                {user.role === 'admin' ? 'Administrador' :
+                 user.role === 'staff' ? 'Personal' : 'Practicante'}
               </span>
             </div>
 
             <div className="mt-6 space-y-2 text-sm text-left">
               <div className="flex justify-between py-2 border-b border-gray-200">
                 <span className="text-gray-600">DNI:</span>
-                <span className="font-medium text-gray-900">{user?.dni}</span>
+                <span className="font-medium text-gray-900">{user.dni}</span>
               </div>
-              {user?.role === 'intern' && (
+              {user.role === 'intern' && (
                 <>
                   <div className="flex justify-between py-2 border-b border-gray-200">
                     <span className="text-gray-600">Universidad:</span>
-                    <span className="font-medium text-gray-900">{user?.university || 'N/A'}</span>
+                    <span className="font-medium text-gray-900">{user.university || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-gray-200">
                     <span className="text-gray-600">Semestre:</span>
-                    <span className="font-medium text-gray-900">{user?.semester || 'N/A'}</span>
+                    <span className="font-medium text-gray-900">{user.semester || 'N/A'}</span>
                   </div>
                 </>
               )}
@@ -194,33 +207,33 @@ const Profile = () => {
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-gray-700">Nombre Completo</label>
-                <p className="mt-1 text-gray-900">{user?.name}</p>
+                <p className="mt-1 text-gray-900">{user.name}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Email</label>
-                <p className="mt-1 text-gray-900">{user?.email || 'No registrado'}</p>
+                <p className="mt-1 text-gray-900">{user.email || 'No registrado'}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Teléfono</label>
-                <p className="mt-1 text-gray-900">{user?.phone || 'No registrado'}</p>
+                <p className="mt-1 text-gray-900">{user.phone || 'No registrado'}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Dirección</label>
-                <p className="mt-1 text-gray-900">{user?.address || 'No registrado'}</p>
+                <p className="mt-1 text-gray-900">{user.address || 'No registrado'}</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-700">Distrito</label>
-                  <p className="mt-1 text-gray-900">{user?.district || 'No registrado'}</p>
+                  <p className="mt-1 text-gray-900">{user.district || 'No registrado'}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Ciudad</label>
-                  <p className="mt-1 text-gray-900">{user?.city || 'No registrado'}</p>
+                  <p className="mt-1 text-gray-900">{user.city || 'No registrado'}</p>
                 </div>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Contacto de Emergencia</label>
-                <p className="mt-1 text-gray-900">{user?.emergency_contact || 'No registrado'}</p>
+                <p className="mt-1 text-gray-900">{user.emergency_contact || 'No registrado'}</p>
               </div>
             </div>
           ) : (

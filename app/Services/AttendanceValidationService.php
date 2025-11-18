@@ -1,123 +1,115 @@
 <?php
-// app/Services/AttendanceValidationService.php
+
 namespace App\Services;
 
-use App\Models\Attendance;
-use App\Models\Justification;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class AttendanceValidationService
 {
-    protected $locationService;
-    protected $networkService;
-
-    public function __construct(LocationService $locationService, NetworkService $networkService)
-    {
-        $this->locationService = $locationService;
-        $this->networkService = $networkService;
-    }
-
+    /**
+     * Validar condiciones de asistencia
+     */
     public function validateAttendanceConditions($userId, $latitude, $longitude, $ipAddress)
     {
-        $isInLocation = $this->locationService->isWithinOffice($latitude, $longitude);
-        $isInNetwork = $this->networkService->isInAllowedNetwork($ipAddress);
+        $isValidLocation = $this->validateLocation($latitude, $longitude);
+        $isValidNetwork = $this->validateNetwork($ipAddress);
+        
+        // Requiere aprobación si está fuera de ubicación O fuera de red
+        $requiresApproval = !$isValidLocation || !$isValidNetwork;
 
-        $distance = $this->locationService->getDistanceFromOffice($latitude, $longitude);
+        Log::info('Attendance validation result:', [
+            'user_id' => $userId,
+            'ip' => $ipAddress,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'is_valid_location' => $isValidLocation,
+            'is_valid_network' => $isValidNetwork,
+            'requires_approval' => $requiresApproval
+        ]);
 
         return [
-            'is_valid_location' => $isInLocation,
-            'is_valid_network' => $isInNetwork,
-            'distance_from_office' => round($distance, 2),
-            'requires_approval' => !$isInNetwork || !$isInLocation,
-            'validation_message' => $this->getValidationMessage($isInLocation, $isInNetwork, $distance),
+            'is_valid_location' => $isValidLocation,
+            'is_valid_network' => $isValidNetwork,
+            'requires_approval' => $requiresApproval,
+            'ip_address' => $ipAddress,
+            'location' => [
+                'latitude' => $latitude,
+                'longitude' => $longitude
+            ]
         ];
     }
 
-    protected function getValidationMessage($isInLocation, $isInNetwork, $distance)
+    /**
+     * Validar ubicación GPS
+     */
+    private function validateLocation($latitude, $longitude)
     {
-        if ($isInLocation && $isInNetwork) {
-            return 'Condiciones óptimas para registro';
-        }
+        $officeLatitude = config('attendance.office_latitude');
+        $officeLongitude = config('attendance.office_longitude');
+        $maxDistance = config('attendance.office_radius_meters');
 
-        $messages = [];
+        $distance = $this->calculateDistance(
+            $latitude,
+            $longitude,
+            $officeLatitude,
+            $officeLongitude
+        );
 
-        if (!$isInNetwork) {
-            $messages[] = 'No estás conectado a la red de la oficina';
-        }
+        Log::info('Location validation:', [
+            'distance' => $distance,
+            'max_distance' => $maxDistance,
+            'is_valid' => $distance <= $maxDistance
+        ]);
 
-        if (!$isInLocation) {
-            $messages[] = sprintf('Estás a %.2f metros de la oficina', $distance);
-        }
-
-        return implode('. ', $messages) . '. Requiere aprobación del supervisor.';
+        return $distance <= $maxDistance;
     }
 
-    public function getAttendanceSummary($userId, Carbon $startDate, Carbon $endDate)
+    /**
+     * Validar red privada
+     */
+    private function validateNetwork($ipAddress)
     {
-        $attendances = Attendance::where('user_id', $userId)
-            ->whereBetween('date', [$startDate, $endDate])
-            ->get();
-
-        $justifications = Justification::where('user_id', $userId)
-            ->whereBetween('date', [$startDate, $endDate])
-            ->get();
-
-        $workingDays = $this->getWorkingDays($startDate, $endDate);
-        $attendedDays = $attendances->where('status', 'approved')->count();
-        $pendingDays = $attendances->where('status', 'pending')->count();
-        $totalDelays = $attendances->where('has_delay', true)->count();
-        $justifiedAbsences = $justifications->where('type', 'absence')->where('status', 'approved')->count();
-
-        return [
-            'period' => [
-                'start' => $startDate->format('Y-m-d'),
-                'end' => $endDate->format('Y-m-d'),
-            ],
-            'working_days' => $workingDays,
-            'attended_days' => $attendedDays,
-            'pending_days' => $pendingDays,
-            'absent_days' => $workingDays - $attendedDays - $pendingDays,
-            'justified_absences' => $justifiedAbsences,
-            'delays' => $totalDelays,
-            'attendance_rate' => $workingDays > 0 ? round(($attendedDays / $workingDays) * 100, 2) : 0,
-        ];
-    }
-
-    protected function getWorkingDays(Carbon $startDate, Carbon $endDate)
-    {
-        $days = 0;
-        $current = $startDate->copy();
-
-        while ($current <= $endDate) {
-            // Excluir sábados (6) y domingos (0)
-            if ($current->dayOfWeek !== 0 && $current->dayOfWeek !== 6) {
-                $days++;
-            }
-            $current->addDay();
-        }
-
-        return $days;
-    }
-
-    public function autoApproveAttendance($attendanceId)
-    {
-        $attendance = Attendance::find($attendanceId);
-
-        if (!$attendance) {
-            return false;
-        }
-
-        // Auto-aprobar si cumple condiciones
-        if (!$attendance->is_remote_entry && !$attendance->is_remote_exit && !$attendance->has_delay) {
-            $attendance->update([
-                'status' => 'approved',
-                'validated_at' => now(),
-            ]);
-
+        $allowedNetwork = config('attendance.allowed_network');
+        
+        // Si no hay red configurada, permitir todas
+        if (!$allowedNetwork) {
             return true;
         }
 
-        return false;
+        // Verificar si la IP está en el rango permitido
+        list($subnet, $mask) = explode('/', $allowedNetwork);
+        
+        $ipLong = ip2long($ipAddress);
+        $subnetLong = ip2long($subnet);
+        $maskLong = -1 << (32 - $mask);
+        
+        $isInNetwork = ($ipLong & $maskLong) === ($subnetLong & $maskLong);
+
+        Log::info('Network validation:', [
+            'ip' => $ipAddress,
+            'allowed_network' => $allowedNetwork,
+            'is_in_network' => $isInNetwork
+        ]);
+
+        return $isInNetwork;
+    }
+
+    /**
+     * Calcular distancia entre dos puntos GPS (en metros)
+     */
+    private function calculateDistance($lat1, $lon1, $lat2, $lon2)
+    {
+        $earthRadius = 6371000; // metros
+
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLon = deg2rad($lon2 - $lon1);
+
+        $a = sin($dLat/2) * sin($dLat/2) +
+             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+             sin($dLon/2) * sin($dLon/2);
+
+        $c = 2 * atan2(sqrt($a), sqrt(1-$a));
+
+        return $earthRadius * $c;
     }
 }
-

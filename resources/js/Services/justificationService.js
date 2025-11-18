@@ -6,13 +6,17 @@ export const justificationService = {
     return response.data;
   },
 
-  createJustification: async (data) => {
-    const formData = new FormData();
-    Object.keys(data).forEach(key => {
-      if (data[key] !== null && data[key] !== undefined) {
-        formData.append(key, data[key]);
-      }
-    });
+  createJustification: async (formData) => {
+    // Si formData es un objeto normal, convertirlo a FormData
+    if (!(formData instanceof FormData)) {
+      const data = new FormData();
+      Object.keys(formData).forEach(key => {
+        if (formData[key] !== null && formData[key] !== undefined && formData[key] !== '') {
+          data.append(key, formData[key]);
+        }
+      });
+      formData = data;
+    }
 
     const response = await api.post('/justifications', formData, {
       headers: {
@@ -35,4 +39,3 @@ export const justificationService = {
     return response.data;
   },
 };
-
