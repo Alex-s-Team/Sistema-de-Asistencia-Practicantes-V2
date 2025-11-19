@@ -8,6 +8,8 @@ import { Select } from '../../Components/Common/Select';
 import { LoadingSpinner } from '../../Components/Common/LoadingSpinner';
 import { Badge } from '../../Components/Common/Badge';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import {
   ChartBarIcon,
   DocumentArrowDownIcon,
@@ -19,6 +21,7 @@ import {
   FunnelIcon,
   UserGroupIcon,
   MapPinIcon,
+  EyeIcon,
 } from '@heroicons/react/24/outline';
 import { formatDate } from '../../Utils/helpers';
 
@@ -198,6 +201,40 @@ const Reports = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getAssignedUserNames = (task) => {
+    // Intentar diferentes propiedades donde podrían estar los usuarios asignados
+    if (task.assigned_users && Array.isArray(task.assigned_users)) {
+      return task.assigned_users.map(u => typeof u === 'object' ? u.name : u).join(', ');
+    }
+    
+    if (task.assignedUsers && Array.isArray(task.assignedUsers)) {
+      return task.assignedUsers.map(u => typeof u === 'object' ? u.name : u).join(', ');
+    }
+    
+    if (task.assigned_to && Array.isArray(task.assigned_to)) {
+      return task.assigned_to.map(u => typeof u === 'object' ? u.name : u).join(', ');
+    }
+    
+    return 'Sin asignar';
+  };
+
+  const getAssignedUserIds = (task) => {
+    // Intentar diferentes propiedades donde podrían estar los usuarios asignados
+    if (task.assigned_users && Array.isArray(task.assigned_users)) {
+      return task.assigned_users.map(u => typeof u === 'object' ? u.id : u);
+    }
+    
+    if (task.assignedUsers && Array.isArray(task.assignedUsers)) {
+      return task.assignedUsers.map(u => typeof u === 'object' ? u.id : u);
+    }
+    
+    if (task.assigned_to && Array.isArray(task.assigned_to)) {
+      return task.assigned_to.map(u => typeof u === 'object' ? u.id : u);
+    }
+    
+    return [];
   };
 
   const exportToExcel = () => {
@@ -463,7 +500,14 @@ const Reports = () => {
         </Card>
       </div>
 
-      {/* Estados de Asistencia */}
+      
+
+      {/* Tabla de Asistencias */}
+      <Card
+        title="📋 Detalle de Asistencias"
+        subtitle={`${reportData.attendances.length} registros encontrados`}
+      >
+        {/* Estados de Asistencia */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-gradient-to-br from-green-50 to-white border-l-4 border-green-500 hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
@@ -523,44 +567,7 @@ const Reports = () => {
         </Card>
       </div>
 
-      {/* Tareas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-yellow-50 to-white border-l-4 border-yellow-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">📋 Pendientes</p>
-              <p className="text-3xl font-bold text-gray-900">{reportData.tasks.pending.length}</p>
-            </div>
-            <ClockIcon className="h-12 w-12 text-yellow-500" />
-          </div>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-blue-50 to-white border-l-4 border-blue-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">⚡ En Progreso</p>
-              <p className="text-3xl font-bold text-gray-900">{reportData.tasks.in_progress.length}</p>
-            </div>
-            <PlayIcon className="h-12 w-12 text-blue-500" />
-          </div>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-green-50 to-white border-l-4 border-green-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">✅ Completadas</p>
-              <p className="text-3xl font-bold text-gray-900">{reportData.tasks.completed.length}</p>
-            </div>
-            <CheckCircleIcon className="h-12 w-12 text-green-500" />
-          </div>
-        </Card>
-      </div>
-
-      {/* Tabla de Asistencias */}
-      <Card
-        title="📋 Detalle de Asistencias"
-        subtitle={`${reportData.attendances.length} registros encontrados`}
-      >
+      <br />
         {loading ? (
           <div className="text-center py-8">
             <LoadingSpinner message="Cargando asistencias..." />
@@ -639,11 +646,46 @@ const Reports = () => {
         )}
       </Card>
 
+      
       {/* Resumen de Tareas */}
       <Card
         title="📋 Resumen de Tareas"
         subtitle={`${reportData.summary.completedTasks} de ${reportData.summary.totalTasks} completadas`}
       >
+      {/* Tareas */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="bg-gradient-to-br from-yellow-50 to-white border-l-4 border-yellow-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">📋 Pendientes</p>
+              <p className="text-3xl font-bold text-gray-900">{reportData.tasks.pending.length}</p>
+            </div>
+            <ClockIcon className="h-12 w-12 text-yellow-500" />
+          </div>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-blue-50 to-white border-l-4 border-blue-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">⚡ En Progreso</p>
+              <p className="text-3xl font-bold text-gray-900">{reportData.tasks.in_progress.length}</p>
+            </div>
+            <PlayIcon className="h-12 w-12 text-blue-500" />
+          </div>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-green-50 to-white border-l-4 border-green-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">✅ Completadas</p>
+              <p className="text-3xl font-bold text-gray-900">{reportData.tasks.completed.length}</p>
+            </div>
+            <CheckCircleIcon className="h-12 w-12 text-green-500" />
+          </div>
+        </Card>
+      </div>
+      <br />
+        
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-700 font-medium">Progreso de Tareas</span>
@@ -672,7 +714,8 @@ const Reports = () => {
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{task.title}</p>
                       <p className="text-sm text-gray-600 mt-1">
-                        👤 {task.assigned_to?.map(u => u.name).join(', ') || 'Sin asignar'}
+                        
+                        {getAssignedUserNames(task)}
                       </p>
                     </div>
                     <Badge type="status" value={task.status}>
@@ -701,7 +744,7 @@ const Reports = () => {
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{task.title}</p>
                       <p className="text-sm text-gray-600 mt-1">
-                        👤 {task.assigned_to?.map(u => u.name).join(', ') || 'Sin asignar'}
+                        👤 {getAssignedUserNames(task)}
                       </p>
                     </div>
                     <Badge type="status" value="completed">
@@ -714,6 +757,8 @@ const Reports = () => {
           )}
         </div>
       </Card>
+
+      
 
       {/* Información Adicional */}
       <Card className="bg-gradient-to-r from-primary-50 to-blue-50">
