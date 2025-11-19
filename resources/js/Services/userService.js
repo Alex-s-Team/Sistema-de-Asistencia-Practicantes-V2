@@ -1,45 +1,101 @@
+// resources/js/Services/userService.js
 import api from './api';
 
 export const userService = {
-  // Obtener todos los usuarios
+  /**
+   * Obtener todos los usuarios
+   */
   getUsers: async (params = {}) => {
-    const response = await api.get('/users', { params });
-    return response.data;
+    try {
+      const response = await api.get('/users', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error getting users:', error);
+      throw error;
+    }
   },
 
-  // Obtener solo practicantes
+  /**
+   * ✅ Obtener solo practicantes activos
+   */
   getInterns: async () => {
-    const response = await api.get('/users/interns');
-    return response.data;
+    try {
+      console.log('🔄 Solicitando practicantes...');
+      const response = await api.get('/users/interns');
+      console.log('✅ Respuesta de /users/interns:', response.data);
+      
+      // Retornar directamente response.data
+      // El backend ya devuelve el array o {data: [...]}
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error getting interns:', error);
+      console.error('Response:', error.response?.data);
+      throw error;
+    }
   },
 
-  // Obtener un usuario por ID
+  /**
+   * Obtener un usuario específico
+   */
   getUser: async (id) => {
-    const response = await api.get(`/users/${id}`);
-    return response.data;
+    try {
+      const response = await api.get(`/users/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting user:', error);
+      throw error;
+    }
   },
 
-  // Crear un nuevo usuario
-  createUser: async (userData) => {
-    const response = await api.post('/users', userData);
-    return response.data;
+  /**
+   * Crear nuevo usuario
+   */
+  createUser: async (data) => {
+    try {
+      const response = await api.post('/users', data);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating user:', error);
+      throw error;
+    }
   },
 
-  // Actualizar un usuario
-  updateUser: async (id, userData) => {
-    const response = await api.put(`/users/${id}`, userData);
-    return response.data;
+  /**
+   * Actualizar usuario
+   */
+  updateUser: async (id, data) => {
+    try {
+      const response = await api.put(`/users/${id}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw error;
+    }
   },
 
-  // Eliminar (desactivar) un usuario
+  /**
+   * Desactivar usuario
+   */
   deleteUser: async (id) => {
-    const response = await api.delete(`/users/${id}`);
-    return response.data;
+    try {
+      const response = await api.delete(`/users/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw error;
+    }
   },
 
-  // Restablecer contraseña de un usuario (solo admin)
-  resetPassword: async (id) => {
-    const response = await api.post(`/users/${id}/reset-password`);
-    return response.data;
+  /**
+   * Resetear contraseña de usuario
+   */
+  resetPassword: async (id, data) => {
+    try {
+      const response = await api.post(`/users/${id}/reset-password`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      throw error;
+    }
   },
 };

@@ -20,8 +20,6 @@ Route::post('/login', [AuthController::class, 'login']);
 
 // Rutas protegidas
 Route::middleware(['auth:sanctum'])->group(function () {
-    
-    
     // ========== AUTENTICACIÓN ==========
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
@@ -56,7 +54,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/{id}/review', [JustificationController::class, 'review']);
     });
 
-    // ========== USUARIOS (Solo admin y staff) ==========
+    // ========== USUARIOS ==========
     Route::prefix('users')->group(function () {
         Route::get('/', [UserController::class, 'index']);
         Route::post('/', [UserController::class, 'store']);
@@ -64,7 +62,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/{id}', [UserController::class, 'show']);
         Route::put('/{id}', [UserController::class, 'update']);
         Route::delete('/{id}', [UserController::class, 'destroy']);
-        Route::post('/{id}/reset-password', [UserController::class, 'resetPassword']); // Nueva ruta
+        Route::post('/{id}/reset-password', [UserController::class, 'resetPassword']);
     });
 
     // ========== CHAT ==========

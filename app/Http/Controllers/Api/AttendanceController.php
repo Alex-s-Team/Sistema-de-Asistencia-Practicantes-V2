@@ -222,36 +222,47 @@ class AttendanceController extends Controller
     {
         try {
             $user = $request->user();
-
             $query = Attendance::with(['user']);
-
+            
+            // ✅ FILTRO POR ESTADO (el más importante para tu reporte)
+            // ... (todos los filtros que ya añadimos antes se mantienen igual)
             if ($user->isIntern()) {
                 $query->where('user_id', $user->id);
-            }
-
-            if ($request->has('month')) {
-                $query->whereMonth('date', $request->month);
-            }
-
-            if ($request->has('year')) {
-                $query->whereYear('date', $request->year);
-            }
-
-            if ($request->has('user_id') && $user->canManageUsers()) {
+            } elseif ($request->has('user_id') && $user->canManageUsers()) {
                 $query->where('user_id', $request->user_id);
+            }
+
+            if ($request->has('start_date')) {
+                $query->whereDate('date', '>=', $request->start_date);
+            }
+            if ($request->has('end_date')) {
+                $query->whereDate('date', '<=', $request->end_date);
+            }
+
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
             }
 
             $attendances = $query->orderBy('date', 'desc')->get();
 
-            return response()->json($attendances);
+            // ✅ CAMBIO CLAVE: Asegurarse de que la respuesta siempre tenga una clave 'data'
+            // Esto es para estandarizar la respuesta y evitar 'data: undefined'
+            return response()->json([
+                'data' => $attendances // <-- Envolver la colección en una clave 'data'
+            ]);
+
         } catch (\Exception $e) {
-            Log::error('Error in AttendanceController@index:', ['message' => $e->getMessage()]);
+            Log::error('Error in AttendanceController@index:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'message' => 'Error al obtener asistencias',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
+
 
     public function pending(Request $request)
     {
@@ -264,7 +275,6 @@ class AttendanceController extends Controller
                 ], 403);
             }
 
-            // ✅ OBTENER TODAS LAS ASISTENCIAS PENDIENTES
             $pendingAttendances = Attendance::with(['user'])
                 ->where('status', 'pending')
                 ->orderBy('date', 'desc')
@@ -276,7 +286,11 @@ class AttendanceController extends Controller
                 'data' => $pendingAttendances->toArray()
             ]);
 
-            return response()->json($pendingAttendances);
+            // ✅ CAMBIO CLAVE: Estandarizar la respuesta para que siempre tenga una clave 'data'
+            return response()->json([
+                'data' => $pendingAttendances
+            ]);
+
         } catch (\Exception $e) {
             Log::error('Error in AttendanceController@pending:', [
                 'message' => $e->getMessage(),
