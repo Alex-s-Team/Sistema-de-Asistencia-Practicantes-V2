@@ -48,6 +48,7 @@ class AttendanceController extends Controller
                 'longitude' => 'required|numeric',
                 'qr_token' => 'required|string',
                 'remote_reason' => 'nullable|string',
+                'device_time' => 'required|date',
             ]);
 
             Log::info('Datos validados correctamente:', $validated);
@@ -57,7 +58,12 @@ class AttendanceController extends Controller
             Log::info('IP del usuario:', ['ip' => $ipAddress]);
             
             // ✅ CAPTURAR LA HORA EXACTA DEL MOMENTO DEL REGISTRO
-            $currentTime = Carbon::now();
+            $deviceTime = $request->input('device_time');
+            if (!$deviceTime) {
+                return response()->json(['message' => 'Falta la hora del dispositivo'], 422);
+            }
+
+            $currentTime = Carbon::parse($deviceTime);
             $registrationTime = $currentTime->format('H:i:s');
             
             Log::info('Hora exacta de registro:', [

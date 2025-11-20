@@ -19,7 +19,7 @@ return [
     'qr_refresh_seconds' => env('QR_REFRESH_SECONDS', 30),
 
     // Tolerancia de retraso (minutos)
-    'delay_tolerance_minutes' => env('DELAY_TOLERANCE_MINUTES', 5),
+    'delay_tolerance_minutes' => env('DELAY_TOLERANCE_MINUTES', 10),
 
     // Días hábiles (1 = Lunes, 7 = Domingo)
     'working_days' => [1, 2, 3, 4, 5], // Lunes a Viernes

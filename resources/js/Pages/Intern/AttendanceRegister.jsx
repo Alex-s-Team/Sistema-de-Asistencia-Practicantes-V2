@@ -63,11 +63,15 @@ const AttendanceRegister = () => {
       setSubmitting(true);
       setError('');
 
+      const now = new Date();
+      const localISOString = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString();
+
       const response = await attendanceService.markAttendance({
         qr_token: token,
         type: type,
         latitude: location.latitude,
         longitude: location.longitude,
+        device_time: localISOString,
       });
 
       console.log('Respuesta del servidor:', response);
