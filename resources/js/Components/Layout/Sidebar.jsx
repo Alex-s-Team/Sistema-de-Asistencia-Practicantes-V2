@@ -1,7 +1,8 @@
+// resources/js/Components/Layout/Sidebar.jsx
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../Context/AuthContext';
-import { 
+import {
   HomeIcon,
   ClockIcon,
   CheckCircleIcon,
@@ -11,7 +12,8 @@ import {
   DocumentTextIcon,
   UserCircleIcon,
   ChartBarIcon,
-  XMarkIcon
+  XMarkIcon,
+  ClipboardDocumentCheckIcon  // ✅ NUEVO ÍCONO
 } from '@heroicons/react/24/outline';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -39,6 +41,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     intern: [
       { name: 'Dashboard', href: '/', icon: HomeIcon },
       { name: 'Marcar Asistencia', href: '/mark-attendance', icon: ClockIcon },
+      { name: 'Mis Asistencias', href: '/validated-attendances', icon: ClipboardDocumentCheckIcon }, // ✅ ACTUALIZADO
       { name: 'Mis Tareas', href: '/my-tasks', icon: ClipboardDocumentListIcon },
       { name: 'Justificaciones', href: '/justifications', icon: DocumentTextIcon },
       { name: 'Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },

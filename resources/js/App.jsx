@@ -1,3 +1,4 @@
+// ARCHIVO COMPLETO App.jsx actualizado:
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './Context/AuthContext';
@@ -21,6 +22,7 @@ import TaskManagement from './Pages/Staff/TaskManagement';
 import InternDashboard from './Pages/Intern/Dashboard';
 import MarkAttendance from './Pages/Intern/MarkAttendance';
 import MyTasks from './Pages/Intern/MyTasks';
+import InternValidatedAttendances from './Pages/Intern/ValidatedAttendances'; // ✅ NUEVA IMPORTACIÓN
 
 // Common Pages (para todos los roles)
 import Profile from './Pages/Common/Profile';
@@ -139,6 +141,16 @@ const AppRoutes = () => {
           }
         />
 
+        {/* ✅ NUEVA RUTA - Asistencias Validadas para Practicantes */}
+        <Route
+          path="validated-attendances"
+          element={
+            <ProtectedRoute allowedRoles={['intern']}>
+              <InternValidatedAttendances />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="my-tasks"
           element={
@@ -186,11 +198,11 @@ const AppRoutes = () => {
 function App() {
   return (
     <AuthProvider>
-      <ChatProvider>  
+      <ChatProvider>
         <Router>
           <AppRoutes />
         </Router>
-      </ChatProvider>  
+      </ChatProvider>
     </AuthProvider>
   );
 }

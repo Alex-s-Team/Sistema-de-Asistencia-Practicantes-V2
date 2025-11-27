@@ -16,7 +16,7 @@ import {
   QrCodeIcon,
   ShieldCheckIcon,
   ShieldExclamationIcon,
-  ChatBubbleLeftIcon
+  ArrowRightIcon
 } from '@heroicons/react/24/outline';
 
 const ValidateAttendance = () => {
@@ -40,7 +40,7 @@ const ValidateAttendance = () => {
       setLoading(true);
       const response = await attendanceService.getPending();
       const data = Array.isArray(response) ? response : response.data || [];
-      
+
       console.log('Asistencias pendientes cargadas:', data);
       setAttendances(data);
     } catch (error) {
@@ -54,16 +54,16 @@ const ValidateAttendance = () => {
   const handleValidate = async (attendanceId, status, respondPrivately = false) => {
     try {
       setValidating(true);
-      await attendanceService.validate(attendanceId, { 
+      await attendanceService.validate(attendanceId, {
         status,
-        validation_notes: validationNotes 
+        validation_notes: validationNotes
       });
-      
+
       setMessage({
         type: 'success',
         text: `Asistencia ${status === 'approved' ? 'aprobada' : 'rechazada'} correctamente`,
       });
-      
+
       setShowModal(false);
       setSelectedAttendance(null);
       setValidationNotes('');
@@ -128,8 +128,7 @@ const ValidateAttendance = () => {
   };
 
   const formatTime = (time) => {
-    if (!time) return 'N/A';
-    // Convertir formato 24h a 12h con AM/PM
+    if (!time) return null;
     const [hours, minutes] = time.split(':');
     const hour = parseInt(hours);
     const ampm = hour >= 12 ? 'PM' : 'AM';
@@ -137,14 +136,34 @@ const ValidateAttendance = () => {
     return `${hour12}:${minutes} ${ampm}`;
   };
 
-  // ✅ FUNCIÓN HELPER para convertir coordenadas a número de forma segura
+  // Calcular horas trabajadas
+  const calculateWorkedHours = (entryTime, exitTime) => {
+    if (!entryTime || !exitTime) return null;
+
+    const [entryH, entryM] = entryTime.split(':').map(Number);
+    const [exitH, exitM] = exitTime.split(':').map(Number);
+
+    const entryMinutes = entryH * 60 + entryM;
+    const exitMinutes = exitH * 60 + exitM;
+
+    let diffMinutes = exitMinutes - entryMinutes;
+
+    if (diffMinutes < 0) {
+      diffMinutes += 24 * 60;
+    }
+
+    const hours = Math.floor(diffMinutes / 60);
+    const minutes = diffMinutes % 60;
+
+    return { hours, minutes, total: diffMinutes };
+  };
+
   const parseCoordinate = (coord) => {
     if (coord === null || coord === undefined) return null;
     const num = parseFloat(coord);
     return isNaN(num) ? null : num;
   };
 
-  // ✅ FUNCIÓN HELPER para formatear coordenadas
   const formatCoordinate = (coord) => {
     const num = parseCoordinate(coord);
     return num !== null ? num.toFixed(6) : 'N/A';
@@ -200,15 +219,19 @@ const ValidateAttendance = () => {
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {attendances.map((attendance) => {
-            const networkValid = isValidNetwork(attendance.entry_ip || attendance.exit_ip);
+            const networkValidEntry = isValidNetwork(attendance.entry_ip);
+            const networkValidExit = isValidNetwork(attendance.exit_ip);
             const qrValid = isQRValid(attendance.qr_token);
-            const distanceStatus = getDistanceStatus(attendance.distance_from_office);
-            const isEntry = !!attendance.entry_time;
-            
-            // ✅ Parsear coordenadas de forma segura
-            const latitude = parseCoordinate(attendance.entry_latitude || attendance.exit_latitude);
-            const longitude = parseCoordinate(attendance.entry_longitude || attendance.exit_longitude);
-            
+            const distanceStatusEntry = getDistanceStatus(attendance.distance_from_office);
+            const hasEntry = !!attendance.entry_time;
+            const hasExit = !!attendance.exit_time;
+            const workedHours = calculateWorkedHours(attendance.entry_time, attendance.exit_time);
+
+            const latitudeEntry = parseCoordinate(attendance.entry_latitude);
+            const longitudeEntry = parseCoordinate(attendance.entry_longitude);
+            const latitudeExit = parseCoordinate(attendance.exit_latitude);
+            const longitudeExit = parseCoordinate(attendance.exit_longitude);
+
             return (
               <Card key={attendance.id} className="hover:shadow-lg transition-shadow">
                 <div className="space-y-4">
@@ -233,82 +256,185 @@ const ValidateAttendance = () => {
                       <Badge type="status" value="pending">
                         Pendiente
                       </Badge>
-                      <Badge type={isEntry ? 'primary' : 'secondary'}>
-                        {isEntry ? 'ENTRADA' : 'SALIDA'}
-                      </Badge>
+                      <p className="text-sm text-gray-600">
+                        {formatDate(attendance.date)}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Info Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Fecha y Hora */}
-                    <div className="flex items-center gap-2 text-sm">
-                      <ClockIcon className="h-5 w-5 text-gray-400" />
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {formatDate(attendance.date)}
-                        </p>
-                        <p className="text-lg font-bold text-primary-600">
-                          {formatTime(attendance.entry_time || attendance.exit_time)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Registrado: {new Date(attendance.created_at).toLocaleString('es-PE')}
-                        </p>
+                  {/* Entrada y Salida en Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* ENTRADA */}
+                    <div className={`border-2 rounded-lg p-4 ${
+                      hasEntry ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-gray-50'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <ClockIcon className="h-5 w-5 text-green-600" />
+                        <h4 className="font-bold text-green-800 uppercase">Entrada</h4>
                       </div>
-                    </div>
 
-                    {/* Ubicación GPS */}
-                    <div className="flex items-center gap-2 text-sm">
-                      <MapPinIcon className="h-5 w-5 text-gray-400" />
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">Ubicación GPS</p>
-                        <p className="text-xs text-gray-600 font-mono">
-                          {formatCoordinate(attendance.entry_latitude || attendance.exit_latitude)}, 
-                          {formatCoordinate(attendance.entry_longitude || attendance.exit_longitude)}
-                        </p>
-                        {attendance.distance_from_office && (
-                          <p className={`text-xs font-semibold mt-1 text-${distanceStatus.color}-600`}>
-                            📍 {Math.round(parseFloat(attendance.distance_from_office))}m - {distanceStatus.text}
-                          </p>
-                        )}
-                        {latitude !== null && longitude !== null && (
-                          <button
-                            onClick={() => openMapLocation(latitude, longitude)}
-                            className="text-xs text-blue-600 hover:underline mt-1"
-                          >
-                            🗺️ Ver en Google Maps →
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                      {hasEntry ? (
+                        <div className="space-y-3">
+                          {/* Hora */}
+                          <div>
+                            <p className="text-xs text-gray-600 mb-1">Hora de entrada:</p>
+                            <p className="text-2xl font-bold text-green-600">
+                              {formatTime(attendance.entry_time)}
+                            </p>
+                            {attendance.has_delay && (
+                              <Badge type="warning" className="mt-1">
+                                Retardo: {attendance.delay_minutes}min
+                              </Badge>
+                            )}
+                          </div>
 
-                    {/* Red e IP */}
-                    <div className="flex items-center gap-2 text-sm">
-                      <GlobeAltIcon className="h-5 w-5 text-gray-400" />
-                      <div>
-                        <p className="font-medium text-gray-900">Conexión</p>
-                        <p className="text-xs text-gray-600 font-mono">
-                          {attendance.entry_ip || attendance.exit_ip}
-                        </p>
-                        <div className="mt-1">
-                          {networkValid ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-green-600 font-semibold">
-                              <CheckCircleIcon className="h-3 w-3" />
-                              Red de Oficina
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-xs text-red-600 font-semibold">
-                              <ExclamationTriangleIcon className="h-3 w-3" />
-                              Red Externa
-                            </span>
-                          )}
+                          {/* Ubicación */}
+                          <div>
+                            <p className="text-xs text-gray-600 mb-1">Ubicación GPS:</p>
+                            <p className="text-xs text-gray-700 font-mono">
+                              {formatCoordinate(attendance.entry_latitude)},
+                              {formatCoordinate(attendance.entry_longitude)}
+                            </p>
+                            {attendance.distance_from_office && (
+                              <p className={`text-xs font-semibold mt-1 text-${distanceStatusEntry.color}-600`}>
+                                📍 {Math.round(parseFloat(attendance.distance_from_office))}m - {distanceStatusEntry.text}
+                              </p>
+                            )}
+                            {latitudeEntry !== null && longitudeEntry !== null && (
+                              <button
+                                onClick={() => openMapLocation(latitudeEntry, longitudeEntry)}
+                                className="text-xs text-blue-600 hover:underline mt-1"
+                              >
+                                🗺️ Ver en Google Maps →
+                              </button>
+                            )}
+                          </div>
+
+                          {/* IP y Red */}
+                          <div>
+                            <p className="text-xs text-gray-600 mb-1">Conexión:</p>
+                            <p className="text-xs text-gray-700 font-mono">
+                              {attendance.entry_ip}
+                            </p>
+                            <div className="mt-1">
+                              {networkValidEntry ? (
+                                <span className="inline-flex items-center gap-1 text-xs text-green-600 font-semibold">
+                                  <CheckCircleIcon className="h-3 w-3" />
+                                  Red de Oficina
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs text-red-600 font-semibold">
+                                  <ExclamationTriangleIcon className="h-3 w-3" />
+                                  Red Externa
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Registro */}
+                          <div>
+                            <p className="text-xs text-gray-500">
+                              Registrado: {new Date(attendance.created_at).toLocaleString('es-PE')}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {attendance.entry_device || attendance.exit_device || 'Dispositivo desconocido'}
-                        </p>
+                      ) : (
+                        <div className="text-center py-4">
+                          <p className="text-sm text-gray-400">Sin registro de entrada</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* SALIDA */}
+                    <div className={`border-2 rounded-lg p-4 ${
+                      hasExit ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <ClockIcon className="h-5 w-5 text-blue-600" />
+                        <h4 className="font-bold text-blue-800 uppercase">Salida</h4>
                       </div>
+
+                      {hasExit ? (
+                        <div className="space-y-3">
+                          {/* Hora */}
+                          <div>
+                            <p className="text-xs text-gray-600 mb-1">Hora de salida:</p>
+                            <p className="text-2xl font-bold text-blue-600">
+                              {formatTime(attendance.exit_time)}
+                            </p>
+                          </div>
+
+                          {/* Ubicación */}
+                          <div>
+                            <p className="text-xs text-gray-600 mb-1">Ubicación GPS:</p>
+                            <p className="text-xs text-gray-700 font-mono">
+                              {formatCoordinate(attendance.exit_latitude)},
+                              {formatCoordinate(attendance.exit_longitude)}
+                            </p>
+                            {latitudeExit !== null && longitudeExit !== null && (
+                              <button
+                                onClick={() => openMapLocation(latitudeExit, longitudeExit)}
+                                className="text-xs text-blue-600 hover:underline mt-1"
+                              >
+                                🗺️ Ver en Google Maps →
+                              </button>
+                            )}
+                          </div>
+
+                          {/* IP y Red */}
+                          <div>
+                            <p className="text-xs text-gray-600 mb-1">Conexión:</p>
+                            <p className="text-xs text-gray-700 font-mono">
+                              {attendance.exit_ip}
+                            </p>
+                            <div className="mt-1">
+                              {networkValidExit ? (
+                                <span className="inline-flex items-center gap-1 text-xs text-green-600 font-semibold">
+                                  <CheckCircleIcon className="h-3 w-3" />
+                                  Red de Oficina
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs text-red-600 font-semibold">
+                                  <ExclamationTriangleIcon className="h-3 w-3" />
+                                  Red Externa
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4">
+                          <div className="inline-flex items-center gap-2 px-3 py-2 bg-yellow-100 border border-yellow-300 rounded-lg">
+                            <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600" />
+                            <span className="text-sm font-medium text-yellow-800">
+                              No registró salida
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  {/* Horas Trabajadas */}
+                  {workedHours && (
+                    <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <ArrowRightIcon className="h-6 w-6 text-purple-600" />
+                          <div>
+                            <p className="text-sm text-purple-700 font-medium">Total Horas Trabajadas</p>
+                            <p className="text-xs text-purple-600">Entrada → Salida</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-3xl font-bold text-purple-700">
+                            {workedHours.hours}h {workedHours.minutes}m
+                          </p>
+                          <p className="text-xs text-purple-600">{workedHours.total} minutos</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Token QR */}
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50">
@@ -352,7 +478,7 @@ const ValidateAttendance = () => {
                   )}
 
                   {/* Alertas de Seguridad */}
-                  {(!networkValid || !qrValid || distanceStatus.status === 'danger') && (
+                  {((!networkValidEntry && hasEntry) || (!networkValidExit && hasExit) || !qrValid || distanceStatusEntry.status === 'danger') && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                       <div className="flex items-start gap-2">
                         <ExclamationTriangleIcon className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -361,26 +487,13 @@ const ValidateAttendance = () => {
                             ⚠️ Alertas de Seguridad:
                           </p>
                           <ul className="text-xs text-red-800 space-y-1">
-                            {distanceStatus.status === 'danger' && attendance.distance_from_office && (
+                            {distanceStatusEntry.status === 'danger' && attendance.distance_from_office && (
                               <li>• Usuario está a {Math.round(parseFloat(attendance.distance_from_office))}m de la oficina (muy lejos)</li>
                             )}
-                            {!networkValid && <li>• Registro desde red externa (no es red de oficina)</li>}
+                            {!networkValidEntry && hasEntry && <li>• Entrada desde red externa (no es red de oficina)</li>}
+                            {!networkValidExit && hasExit && <li>• Salida desde red externa (no es red de oficina)</li>}
                             {!qrValid && <li>• Token QR no reconocido o inválido</li>}
                           </ul>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Retraso */}
-                  {attendance.has_delay && isEntry && (
-                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                      <div className="flex items-center gap-2">
-                        <ClockIcon className="h-5 w-5 text-orange-600" />
-                        <div>
-                          <p className="font-medium text-orange-900 text-sm">
-                            Llegó con retraso: {attendance.delay_minutes} minutos
-                          </p>
                         </div>
                       </div>
                     </div>
@@ -437,10 +550,21 @@ const ValidateAttendance = () => {
                 <p><strong>Usuario:</strong> {selectedAttendance.user?.name}</p>
                 <p><strong>Email:</strong> {selectedAttendance.user?.email}</p>
                 <p><strong>Fecha:</strong> {formatDate(selectedAttendance.date)}</p>
-                <p><strong>Tipo:</strong> {selectedAttendance.entry_time ? 'ENTRADA' : 'SALIDA'}</p>
-                <p><strong>Hora Registrada:</strong> {formatTime(selectedAttendance.entry_time || selectedAttendance.exit_time)}</p>
-                <p><strong>IP:</strong> {selectedAttendance.entry_ip || selectedAttendance.exit_ip}</p>
-                <p><strong>Coordenadas:</strong> {formatCoordinate(selectedAttendance.entry_latitude || selectedAttendance.exit_latitude)}, {formatCoordinate(selectedAttendance.entry_longitude || selectedAttendance.exit_longitude)}</p>
+
+                {selectedAttendance.entry_time && (
+                  <>
+                    <p><strong>Hora Entrada:</strong> {formatTime(selectedAttendance.entry_time)}</p>
+                    <p><strong>IP Entrada:</strong> {selectedAttendance.entry_ip}</p>
+                  </>
+                )}
+
+                {selectedAttendance.exit_time && (
+                  <>
+                    <p><strong>Hora Salida:</strong> {formatTime(selectedAttendance.exit_time)}</p>
+                    <p><strong>IP Salida:</strong> {selectedAttendance.exit_ip}</p>
+                  </>
+                )}
+
                 {selectedAttendance.distance_from_office && (
                   <p><strong>Distancia:</strong> {Math.round(parseFloat(selectedAttendance.distance_from_office))}m de la oficina</p>
                 )}

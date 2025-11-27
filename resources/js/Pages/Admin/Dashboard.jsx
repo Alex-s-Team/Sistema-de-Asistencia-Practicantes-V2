@@ -1,386 +1,345 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../../Context/AuthContext';
-import { attendanceService } from '../../Services/attendanceService';
-import { taskService } from '../../Services/taskService';
-import { userService } from '../../Services/userService';
 import { Card } from '../../Components/Common/Card';
-import { Button } from '../../Components/Common/Button';
 import { Badge } from '../../Components/Common/Badge';
 import { LoadingSpinner } from '../../Components/Common/LoadingSpinner';
 import { Alert } from '../../Components/Common/Alert';
+import { attendanceService } from '../../Services/attendanceService';
+import { userService } from '../../Services/userService';
 import {
-  UsersIcon,
-  ClipboardDocumentCheckIcon,
-  ExclamationCircleIcon,
-  ChartBarIcon,
   ClockIcon,
-  PlayIcon,
   CheckCircleIcon,
+  XCircleIcon,
+  ExclamationTriangleIcon,
+  CalendarIcon,
+  UserGroupIcon,
+  ChartBarIcon
 } from '@heroicons/react/24/outline';
-import { formatDate } from '../../Utils/helpers';
 
 const AdminDashboard = () => {
-  const { user } = useAuth();
+  const [stats, setStats] = useState(null);
+  const [recentAttendances, setRecentAttendances] = useState([]);
+  const [interns, setInterns] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [stats, setStats] = useState({
-    totalInterns: 0,
-    activeInterns: 0,
-    pendingAttendances: 0,
-    pendingJustifications: 0,
-    todayAttendances: 0,
-    totalTasks: 0,
-    pendingTasks: 0,
-    inProgressTasks: 0,
-    completedTasks: 0,
-  });
-  const [tasks, setTasks] = useState({
-    pending: [],
-    in_progress: [],
-    completed: [],
-  });
-  const [recentData, setRecentData] = useState({
-    interns: [],
-    pendingAttendances: [],
-    tasks: [],
-  });
+  const [message, setMessage] = useState({ type: '', text: '' });
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [selectedDate]);
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      setError('');
 
-      // Las respuestas ya son arrays directamente
-      const [internsData, pendingData, tasksData] = await Promise.all([
-        userService.getInterns(),
-        attendanceService.getPending(),
-        taskService.getTasks(),
+      const [statsData, attendancesData, internsData] = await Promise.all([
+        attendanceService.getStats(),
+        attendanceService.getAttendances({
+          status: 'approved',
+          start_date: selectedDate,
+          end_date: selectedDate
+        }),
+        userService.getInterns()
       ]);
 
-      console.log('Dashboard data:', {
-        interns: internsData,
-        pending: pendingData,
-        tasks: tasksData
-      });
+      setStats(statsData);
 
-      // Procesar datos de tareas - Usando la misma estructura que en MyTasks
-      let tasksList = {
-        pending: [],
-        in_progress: [],
-        completed: [],
-      };
-      
-      if (Array.isArray(tasksData)) {
-        // Si viene como array, lo agrupamos por estado
-        tasksList.pending = tasksData.filter(t => t.status === 'pending');
-        tasksList.in_progress = tasksData.filter(t => t.status === 'in_progress');
-        tasksList.completed = tasksData.filter(t => t.status === 'completed');
-      } else if (tasksData && typeof tasksData === 'object') {
-        // Si ya viene agrupado por estado
-        tasksList = {
-          pending: tasksData.pending || [],
-          in_progress: tasksData.in_progress || [],
-          completed: tasksData.completed || [],
-        };
-      }
-      
-      setTasks(tasksList);
-      
-      // Combinar tareas para recientes
-      const allTasks = [...tasksList.pending, ...tasksList.in_progress, ...tasksList.completed];
-      
-      // Calcular stats
-      const interns = Array.isArray(internsData) ? internsData : [];
-      const pending = Array.isArray(pendingData) ? pendingData : [];
-      
-      setStats({
-        totalInterns: interns.length,
-        activeInterns: interns.filter(i => i.is_active).length,
-        pendingAttendances: pending.length,
-        pendingJustifications: 0, // TODO: implementar cuando tengamos el endpoint
-        todayAttendances: 0, // TODO: implementar
-        totalTasks: allTasks.length,
-        pendingTasks: tasksList.pending.length,
-        inProgressTasks: tasksList.in_progress.length,
-        completedTasks: tasksList.completed.length,
-      });
+      // Asegurarnos de que attendancesData.data existe
+      const attendances = attendancesData?.data || attendancesData || [];
+      setRecentAttendances(Array.isArray(attendances) ? attendances : []);
 
-      // Guardar datos recientes
-      setRecentData({
-        interns: interns.slice(0, 5),
-        pendingAttendances: pending.slice(0, 5),
-        tasks: allTasks.slice(0, 5),
-      });
+      const internsArray = internsData?.data || internsData || [];
+      setInterns(Array.isArray(internsArray) ? internsArray : []);
 
-    } catch (err) {
-      console.error('Error loading dashboard:', err);
-      setError('Error al cargar el dashboard: ' + (err.response?.data?.message || err.message));
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+      setMessage({
+        type: 'error',
+        text: 'Error al cargar datos del dashboard'
+      });
+      setRecentAttendances([]);
+      setInterns([]);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner size="large" />
-      </div>
-    );
-  }
+  // Calcular horas trabajadas
+  const calculateWorkedHours = (entryTime, exitTime) => {
+    if (!entryTime || !exitTime) return null;
 
-  // Combinar tareas pendientes y en progreso
-  const activeTasks = [...tasks.pending, ...tasks.in_progress];
+    const [entryH, entryM] = entryTime.split(':').map(Number);
+    const [exitH, exitM] = exitTime.split(':').map(Number);
+
+    const entryMinutes = entryH * 60 + entryM;
+    const exitMinutes = exitH * 60 + exitM;
+
+    let diffMinutes = exitMinutes - entryMinutes;
+
+    // Si la salida es al día siguiente
+    if (diffMinutes < 0) {
+      diffMinutes += 24 * 60;
+    }
+
+    const hours = Math.floor(diffMinutes / 60);
+    const minutes = diffMinutes % 60;
+
+    return { hours, minutes, total: diffMinutes };
+  };
+
+  const formatTime = (time) => {
+    if (!time) return null;
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
+  };
+
+  const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('es-PE', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  if (loading) {
+    return <LoadingSpinner message="Cargando dashboard..." />;
+  }
 
   return (
     <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="bg-gradient-to-r from-primary-500 to-secondary-500 rounded-lg p-6 text-white">
-        <h1 className="text-3xl font-bold mb-2">
-          Panel de Administración
-        </h1>
-        <p className="text-primary-50">
-          Bienvenido, {user?.name}
-        </p>
-        <p className="text-sm text-primary-100 mt-1">
-          {formatDate(new Date(), 'EEEE, dd MMMM yyyy')}
-        </p>
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Dashboard Administrativo</h1>
+        <p className="text-gray-600 mt-1">Vista general del sistema de asistencias</p>
       </div>
 
-      {/* Error Alert */}
-      {error && (
-        <Alert type="error" message={error} onClose={() => setError('')} />
+      {message.text && (
+        <Alert
+          type={message.type}
+          message={message.text}
+          onClose={() => setMessage({ type: '', text: '' })}
+        />
       )}
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-blue-50 to-white border-l-4 border-blue-500">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Total Practicantes</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.totalInterns}</p>
-              <p className="text-xs text-gray-500 mt-1">registrados</p>
+              <p className="text-blue-100 text-sm">Practicantes Activos</p>
+              <p className="text-3xl font-bold mt-1">{interns.length}</p>
             </div>
-            <UsersIcon className="h-12 w-12 text-blue-500" />
+            <UserGroupIcon className="h-12 w-12 text-blue-200" />
           </div>
         </Card>
 
-        
-        <Card className="bg-gradient-to-br from-green-50 to-white border-l-4 border-green-500">
+        <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Practicantes Activos</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.activeInterns}</p>
-              <p className="text-xs text-gray-500 mt-1">activos hoy</p>
+              <p className="text-green-100 text-sm">Asistencias Hoy</p>
+              <p className="text-3xl font-bold mt-1">{recentAttendances.length}</p>
             </div>
-            <UsersIcon className="h-12 w-12 text-green-500" />
+            <CheckCircleIcon className="h-12 w-12 text-green-200" />
           </div>
         </Card>
 
-        <Link to="/validate-attendance">
-          <Card className="bg-gradient-to-br from-yellow-50 to-white border-l-4 border-yellow-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Asistencias Pendientes</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.pendingAttendances}</p>
-                <p className="text-xs text-gray-500 mt-1">por validar</p>
-              </div>
-              <ClockIcon className="h-12 w-12 text-yellow-500" />
+        <Card className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-yellow-100 text-sm">Pendientes</p>
+              <p className="text-3xl font-bold mt-1">{stats?.pending_validations || 0}</p>
             </div>
-          </Card>
-        </Link>
+            <ExclamationTriangleIcon className="h-12 w-12 text-yellow-200" />
+          </div>
+        </Card>
 
-        {/* MODIFICACIÓN: Tarjeta de Tareas Activas actualizada */}
-        <Link to="/tasks">
-          <Card className="bg-gradient-to-br from-purple-50 to-white border-l-4 border-purple-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Tareas Activas</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.pendingTasks + stats.inProgressTasks}</p>
-                <p className="text-xs text-gray-500 mt-1">pendientes y en progreso</p>
-              </div>
-              <ClipboardDocumentCheckIcon className="h-12 w-12 text-purple-500" />
+        <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-purple-100 text-sm">Total Este Mes</p>
+              <p className="text-3xl font-bold mt-1">{stats?.approved_attendances || 0}</p>
             </div>
-          </Card>
-        </Link>
+            <ChartBarIcon className="h-12 w-12 text-purple-200" />
+          </div>
+        </Card>
       </div>
 
+      {/* Selector de Fecha */}
+      <Card>
+        <div className="flex items-center gap-4">
+          <CalendarIcon className="h-6 w-6 text-gray-400" />
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Ver asistencias del día:
+            </label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-gray-600">Mostrando:</p>
+            <p className="font-semibold text-gray-900">{formatDate(selectedDate)}</p>
+          </div>
+        </div>
+      </Card>
 
+      {/* Tabla de Asistencias */}
+      <Card>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900">
+            Asistencias del Día
+          </h2>
+          <Badge type="info">{recentAttendances.length} registros</Badge>
+        </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link to="/validate-attendance">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer bg-gradient-to-br from-primary-50 to-white">
-            <div className="text-center p-4">
-              <ClockIcon className="h-12 w-12 text-primary-500 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">Validar Asistencias</h3>
-              <p className="text-sm text-gray-600">
-                {stats.pendingAttendances} pendientes de aprobación
-              </p>
-            </div>
-          </Card>
-        </Link>
-
-        <Link to="/users">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer bg-gradient-to-br from-secondary-50 to-white">
-            <div className="text-center p-4">
-              <UsersIcon className="h-12 w-12 text-secondary-500 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">Gestionar Usuarios</h3>
-              <p className="text-sm text-gray-600">
-                {stats.totalInterns} practicantes registrados
-              </p>
-            </div>
-          </Card>
-        </Link>
-
-        <Link to="/tasks">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer bg-gradient-to-br from-blue-50 to-white">
-            <div className="text-center p-4">
-              <ClipboardDocumentCheckIcon className="h-12 w-12 text-blue-500 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">Gestionar Tareas</h3>
-              <p className="text-sm text-gray-600">
-                {stats.totalTasks} tareas registradas
-              </p>
-            </div>
-          </Card>
-        </Link>
-      </div>
-
-      {/* Practicantes Activos */}
-      <Card
-        title="Practicantes Activos"
-        subtitle="Lista de practicantes registrados en el sistema"
-        actions={
-          <Link to="/users">
-            <Button variant="outline" size="sm">
-              Ver Todos
-            </Button>
-          </Link>
-        }
-      >
-        {recentData.interns.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <UsersIcon className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-            <p>No hay practicantes activos</p>
+        {recentAttendances.length === 0 ? (
+          <div className="text-center py-12">
+            <ClockIcon className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500">No hay asistencias registradas para este día</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {recentData.interns.map((intern) => (
-              <div
-                key={intern.id}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex-1">
-                  <h4 className="font-medium text-gray-900">{intern.name}</h4>
-                  <p className="text-sm text-gray-600">{intern.position || 'Practicante'}</p>
-                  <p className="text-xs text-gray-500 mt-1">DNI: {intern.dni}</p>
-                </div>
-                <Badge type="status" value="success">
-                  Activo
-                </Badge>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Practicante
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
+                    Hora Entrada
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
+                    Hora Salida
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
+                    Horas Trabajadas
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
+                    Estado
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
+                    Ubicación
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {recentAttendances.map((attendance) => {
+                  const workedHours = calculateWorkedHours(
+                    attendance.entry_time,
+                    attendance.exit_time
+                  );
+
+                  return (
+                    <tr key={attendance.id} className="hover:bg-gray-50">
+                      {/* Practicante */}
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                            <span className="font-semibold text-primary-600">
+                              {attendance.user?.name?.charAt(0)}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {attendance.user?.name}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {attendance.user?.email}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Hora Entrada */}
+                      <td className="px-4 py-4 text-center">
+                        {attendance.entry_time ? (
+                          <div>
+                            <p className="font-semibold text-green-600 text-lg">
+                              {formatTime(attendance.entry_time)}
+                            </p>
+                            {attendance.has_delay && (
+                              <Badge type="warning" className="mt-1">
+                                +{attendance.delay_minutes} min
+                              </Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-sm">Sin registro</span>
+                        )}
+                      </td>
+
+                      {/* Hora Salida */}
+                      <td className="px-4 py-4 text-center">
+                        {attendance.exit_time ? (
+                          <p className="font-semibold text-blue-600 text-lg">
+                            {formatTime(attendance.exit_time)}
+                          </p>
+                        ) : (
+                          <div className="inline-flex items-center gap-2 px-3 py-1 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <ExclamationTriangleIcon className="h-4 w-4 text-yellow-600" />
+                            <span className="text-sm font-medium text-yellow-700">
+                              No registró salida
+                            </span>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Horas Trabajadas */}
+                      <td className="px-4 py-4 text-center">
+                        {workedHours ? (
+                          <div>
+                            <p className="text-2xl font-bold text-gray-900">
+                              {workedHours.hours}h {workedHours.minutes}m
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {workedHours.total} minutos
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-sm">-</span>
+                        )}
+                      </td>
+
+                      {/* Estado */}
+                      <td className="px-4 py-4 text-center">
+                        <div className="flex flex-col items-center gap-2">
+                          <Badge type="status" value={attendance.status}>
+                            {attendance.status === 'approved' ? 'Aprobado' :
+                             attendance.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
+                          </Badge>
+                          {attendance.is_remote_entry && (
+                            <Badge type="warning">Remoto</Badge>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Ubicación */}
+                      <td className="px-4 py-4 text-center">
+                        {attendance.distance_from_office ? (
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {Math.round(attendance.distance_from_office)}m
+                            </p>
+                            <p className="text-xs text-gray-500">de oficina</p>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-sm">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>
-
-      {/* Pending Attendances */}
-      <Card
-        title="Asistencias Pendientes de Validación"
-        subtitle="Registros que requieren tu aprobación"
-        actions={
-          <Link to="/validate-attendance">
-            <Button variant="outline" size="sm">
-              Ver Todas
-            </Button>
-          </Link>
-        }
-      >
-        {recentData.pendingAttendances.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <ClockIcon className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-            <p>No hay asistencias pendientes de validación</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {recentData.pendingAttendances.map((attendance) => (
-              <div
-                key={attendance.id}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex-1">
-                  <h4 className="font-medium text-gray-900">
-                    {attendance.user?.name || 'Usuario'}
-                  </h4>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {formatDate(attendance.date)} - {attendance.entry_time ? 'Entrada' : 'Salida'}
-                  </p>
-                  {attendance.is_remote_entry && (
-                    <p className="text-xs text-yellow-600 mt-1">
-                      ⚠️ Registro remoto: {attendance.remote_entry_reason || 'Sin razón especificada'}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {attendance.has_delay && (
-                    <Badge type="status" value="warning">
-                      Retraso
-                    </Badge>
-                  )}
-                  <Badge type="status" value="pending">
-                    Pendiente
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* System Info */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card title="Resumen del Sistema">
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Total Usuarios:</span>
-              <span className="font-semibold">{stats.totalInterns + 3}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Practicantes Activos:</span>
-              <span className="font-semibold text-green-600">{stats.activeInterns}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Personal de Oficina:</span>
-              <span className="font-semibold">3</span>
-            </div>
-          </div>
-        </Card>
-
-        <Card title="Acciones Rápidas">
-          <div className="space-y-2">
-            <Link to="/users?action=new">
-              <Button variant="outline" size="sm" className="w-full justify-start">
-                + Registrar Nuevo Practicante
-              </Button>
-            </Link>
-            <Link to="/tasks?action=new">
-              <Button variant="outline" size="sm" className="w-full justify-start">
-                + Crear Nueva Tarea
-              </Button>
-            </Link>
-            <Link to="/reports">
-              <Button variant="outline" size="sm" className="w-full justify-start">
-                <ChartBarIcon className="h-4 w-4 mr-2" />
-                Ver Reportes
-              </Button>
-            </Link>
-          </div>
-        </Card>
-      </div>
     </div>
   );
 };
