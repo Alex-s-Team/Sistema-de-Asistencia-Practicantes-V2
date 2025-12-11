@@ -27,7 +27,6 @@ export default defineConfig({
     build: {
         manifest: true,
         outDir: 'public/build',
-        manifest: 'manifest.json',
         rollupOptions: {
             input: 'resources/js/main.jsx',
         },

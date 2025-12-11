@@ -12,10 +12,8 @@ import { Alert } from '../../Components/Common/Alert';
 import {
   UsersIcon,
   ClipboardDocumentCheckIcon,
-  ExclamationCircleIcon,
   ChartBarIcon,
   ClockIcon,
-  PlayIcon,
   CheckCircleIcon,
   ArrowTrendingUpIcon,
   CalendarDaysIcon,
@@ -132,12 +130,16 @@ const AdminDashboard = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Welcome Header Mejorado */}
-      <div className="bg-gradient-to-r from-[#3484A5] to-[#2CA792] rounded-2xl p-8 text-white shadow-2xl relative overflow-hidden">
+        <div className="relative rounded-2xl p-8 shadow-xl bg-gradient-to-br from-[#0C3C60] to-[#14577A] text-white overflow-hidden">
+
         {/* Elementos decorativos de fondo */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-12 -translate-x-12"></div>
-        
+        <div className="absolute top-10 left-24 w-20 h-20 bg-white/5 blur-xl rounded-full"></div>
+
+        {/* CONTENIDO */}
         <div className="flex items-center justify-between relative z-10">
+
+        {/* Texto */}
           <div>
             <h1 className="text-4xl font-bold mb-3">
               Panel de Administración
@@ -150,9 +152,12 @@ const AdminDashboard = () => {
               {formatDate(new Date(), 'EEEE, dd MMMM yyyy')}
             </p>
           </div>
+
+        {/* Icono decorativo */}
           <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/30">
             <UsersIcon className="h-10 w-10 text-white" />
           </div>
+          
         </div>
       </div>
 
@@ -167,13 +172,14 @@ const AdminDashboard = () => {
 
       {/* Stats Grid Mejorado */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Total Practicantes */}
+        
+        {/* Total Trabajadores */}
         <Card className="bg-gradient-to-br from-blue-50 to-white border-l-4 border-[#3484A5] transform transition-all duration-300 hover:scale-105 hover:shadow-xl group cursor-pointer">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1 flex items-center gap-2">
                 <UsersIcon className="h-4 w-4" />
-                Total Practicantes
+                Total Trabajadores
               </p>
               <p className="text-4xl font-bold text-gray-900 group-hover:text-[#3484A5] transition-colors duration-300">
                 {stats.totalInterns}
@@ -192,7 +198,7 @@ const AdminDashboard = () => {
             <div>
               <p className="text-sm text-gray-600 mb-1 flex items-center gap-2">
                 <CheckCircleIcon className="h-4 w-4" />
-                Practicantes Activos
+                Trabajadores Activos
               </p>
               <p className="text-4xl font-bold text-gray-900 group-hover:text-[#2CA792] transition-colors duration-300">
                 {stats.activeInterns}
@@ -249,140 +255,94 @@ const AdminDashboard = () => {
           </Card>
         </Link>
       </div>
-
-      {/* Quick Actions Mejorado */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Validar Asistencias */}
-        <Link to="/validate-attendance">
-          <Card className="hover:shadow-2xl transition-all duration-300 cursor-pointer bg-gradient-to-br from-[#3484A5]/10 to-white border-2 border-transparent hover:border-[#3484A5]/30 group transform hover:scale-105">
-            <div className="text-center p-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-[#3484A5] to-[#2CA792] rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                <ClockIcon className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="font-bold text-gray-900 mb-2 text-lg">Validar Asistencias</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                {stats.pendingAttendances} pendientes de aprobación
-              </p>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div 
-                  className="bg-gradient-to-r from-[#3484A5] to-[#2CA792] h-3 rounded-full transition-all duration-1000"
-                  style={{ width: `${Math.min((stats.pendingAttendances / Math.max(stats.totalInterns, 1)) * 100, 100)}%` }}
-                ></div>
-              </div>
-              <div className="mt-3 flex justify-between text-xs text-gray-500">
-                <span>0%</span>
-                <span>100%</span>
-              </div>
-            </div>
-          </Card>
-        </Link>
-
-        {/* Gestionar Usuarios */}
-        <Link to="/users">
-          <Card className="hover:shadow-2xl transition-all duration-300 cursor-pointer bg-gradient-to-br from-[#2CA792]/10 to-white border-2 border-transparent hover:border-[#2CA792]/30 group transform hover:scale-105">
-            <div className="text-center p-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-[#2CA792] to-[#3484A5] rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                <UsersIcon className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="font-bold text-gray-900 mb-2 text-lg">Gestionar Usuarios</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                {stats.totalInterns} practicantes registrados
-              </p>
-              <div className="flex items-center justify-center gap-2 text-sm text-[#2CA792] font-semibold">
-                <ArrowTrendingUpIcon className="h-4 w-4" />
-                <span>{stats.activeInterns} activos ({attendanceRate}%)</span>
-              </div>
-            </div>
-          </Card>
-        </Link>
-
-        {/* Gestionar Tareas */}
-        <Link to="/tasks">
-          <Card className="hover:shadow-2xl transition-all duration-300 cursor-pointer bg-gradient-to-br from-blue-50 to-white border-2 border-transparent hover:border-blue-200 group transform hover:scale-105">
-            <div className="text-center p-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                <ClipboardDocumentCheckIcon className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="font-bold text-gray-900 mb-2 text-lg">Gestionar Tareas</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                {stats.totalTasks} tareas registradas
-              </p>
-              <div className="flex items-center justify-center gap-3">
-                <Badge type="status" value="success" className="px-3 py-1">
-                  {stats.completedTasks} ✓
-                </Badge>
-                <Badge type="status" value="warning" className="px-3 py-1">
-                  {stats.pendingTasks + stats.inProgressTasks} ⚡
-                </Badge>
-              </div>
-            </div>
-          </Card>
-        </Link>
-      </div>
-
-      {/* Practicantes Activos */}
-      <Card
-        title={
-          <div className="flex items-center gap-2">
-            <UsersIcon className="h-6 w-6 text-[#3484A5]" />
-            <span>Practicantes Activos</span>
-          </div>
-        }
-        subtitle="Lista de practicantes registrados en el sistema"
-        actions={
-          <Link to="/users">
-            <Button variant="outline" size="sm" className="flex items-center gap-2">
-              <EyeIcon className="h-4 w-4" />
-              Ver Todos
-            </Button>
-          </Link>
-        }
-        className="transform transition-all duration-300 hover:shadow-xl"
+ 
+ {/* Trabajadores Activos */}
+<Card
+  title={
+    <div className="flex items-center gap-2">
+      <UsersIcon className="h-6 w-6 text-[#0C3C60]" />
+      <span className="font-semibold text-gray-800">Trabajadores Activos</span>
+    </div>
+  }
+  subtitle="Lista de trabajadores registrados en el sistema"
+  actions={
+    <Link to="/users">
+      <Button
+        variant="outline"
+        size="sm"
+        className="flex items-center gap-2 border-[#0C3C60]/40 text-[#0C3C60] hover:bg-[#0C3C60] hover:text-white transition-all duration-300"
       >
-        {recentData.interns.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <UsersIcon className="h-10 w-10 text-gray-400" />
+        <EyeIcon className="h-4 w-4" />
+        Ver Todos
+      </Button>
+    </Link>
+  }
+  className="transform transition-all duration-300 hover:shadow-xl bg-white/90 backdrop-blur-md rounded-2xl border border-gray-100"
+>
+  {recentData.interns.length === 0 ? (
+    
+    /* ESTADO VACÍO MEJORADO */
+    <div className="text-center py-12 text-gray-500">
+      <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 shadow-inner rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <UsersIcon className="h-12 w-12 text-gray-400" />
+      </div>
+      <p className="text-lg font-semibold text-gray-600 mb-1">No hay trabajadores activos</p>
+      <p className="text-sm text-gray-500">Aparecerán aquí cuando se registren en el sistema.</p>
+    </div>
+
+  ) : (
+    
+    /* LISTA MEJORADA */
+    <div className="space-y-4">
+      {recentData.interns.map((intern, index) => (
+        <div
+          key={intern.id}
+          className="flex items-center justify-between p-4 bg-white shadow-sm rounded-2xl border border-gray-200 
+                     hover:border-[#0C3C60]/40 hover:shadow-md transition-all duration-300 group"
+          style={{ animationDelay: `${index * 80}ms` }}
+        >
+          <div className="flex items-center gap-4 flex-1">
+            
+            {/* Avatar Icon */}
+            <div className="w-12 h-12 bg-gradient-to-br from-[#0C3C60] to-[#14577A] 
+                            rounded-xl flex items-center justify-center shadow-md 
+                            group-hover:scale-110 transition-transform duration-300">
+              <span className="text-white font-bold text-lg drop-shadow-sm">
+                {intern.name?.charAt(0) || "U"}
+              </span>
             </div>
-            <p className="text-lg font-semibold text-gray-600 mb-2">No hay practicantes activos</p>
-            <p className="text-sm text-gray-500">Los practicantes aparecerán aquí una vez registrados</p>
+
+            {/* Text Info */}
+            <div className="flex-1">
+              <h4 className="font-semibold text-gray-900 group-hover:text-[#0C3C60] transition-colors text-base">
+                {intern.name}
+              </h4>
+              <p className="text-sm text-gray-600">
+                {intern.position || "Trabajador"}
+              </p>
+              <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                <MapPinIcon className="h-3 w-3 text-[#0C3C60]" />
+                DNI: {intern.dni}
+              </p>
+            </div>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {recentData.interns.map((intern, index) => (
-              <div
-                key={intern.id}
-                className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-[#3484A5]/30 transition-all duration-300 group hover:shadow-md"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="w-12 h-12 bg-gradient-to-br from-[#3484A5] to-[#2CA792] rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                    <span className="text-white font-bold text-lg">
-                      {intern.name?.charAt(0) || 'U'}
-                    </span>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-gray-900 group-hover:text-[#3484A5] transition-colors">
-                      {intern.name}
-                    </h4>
-                    <p className="text-sm text-gray-600">{intern.position || 'Practicante'}</p>
-                    <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                      <MapPinIcon className="h-3 w-3" />
-                      DNI: {intern.dni}
-                    </p>
-                  </div>
-                </div>
-                <Badge type="status" value="success" className="px-3 py-2">
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 bg-current rounded-full animate-pulse"></div>
-                    Activo
-                  </div>
-                </Badge>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+
+          {/* Badge Activo */}
+          <Badge
+            type="status"
+            value="success"
+            className="px-3 py-2 bg-green-100 text-green-700 border border-green-300 rounded-lg"
+          >
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
+              Activo
+            </div>
+          </Badge>
+        </div>
+      ))}
+    </div>
+  )}
+</Card>
 
       {/* Asistencias Pendientes */}
       <Card
@@ -458,77 +418,118 @@ const AdminDashboard = () => {
 
       {/* System Info y Acciones Rápidas */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Resumen del Sistema */}
-        <Card 
-          title="Resumen del Sistema"
-          className="transform transition-all duration-300 hover:shadow-xl"
-        >
-          <div className="space-y-4">
-            <div className="flex justify-between items-center p-3 bg-gradient-to-r from-gray-50 to-white rounded-lg hover:bg-gray-50 transition-colors">
-              <span className="text-gray-600 flex items-center gap-2">
-                <UsersIcon className="h-4 w-4" />
-                Total Usuarios:
-              </span>
-              <span className="font-semibold text-gray-900">{stats.totalInterns + 3}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-gradient-to-r from-green-50 to-white rounded-lg hover:bg-green-50 transition-colors">
-              <span className="text-gray-600 flex items-center gap-2">
-                <CheckCircleIcon className="h-4 w-4 text-[#2CA792]" />
-                Practicantes Activos:
-              </span>
-              <span className="font-semibold text-[#2CA792]">{stats.activeInterns}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-gradient-to-r from-blue-50 to-white rounded-lg hover:bg-blue-50 transition-colors">
-              <span className="text-gray-600 flex items-center gap-2">
-                <UsersIcon className="h-4 w-4 text-[#3484A5]" />
-                Personal de Oficina:
-              </span>
-              <span className="font-semibold text-[#3484A5]">3</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-gradient-to-r from-purple-50 to-white rounded-lg hover:bg-purple-50 transition-colors">
-              <span className="text-gray-600 flex items-center gap-2">
-                <ClipboardDocumentCheckIcon className="h-4 w-4 text-purple-500" />
-                Tasa de Finalización:
-              </span>
-              <span className="font-semibold text-purple-600">
-                {stats.totalTasks > 0 ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0}%
-              </span>
-            </div>
-          </div>
-        </Card>
+        {/* Resumen del Sistema — Versión Premium */}
+<Card 
+  title={
+    <span className="text-lg font-semibold text-[#0C3C60] flex items-center gap-2">
+      <ClipboardDocumentCheckIcon className="h-5 w-5 text-[#0C3C60]" />
+      Resumen del Sistema
+    </span>
+  }
+  className="transform transition-all duration-300 hover:shadow-2xl bg-white/90 backdrop-blur-md border border-gray-100 rounded-2xl"
+>
+  <div className="space-y-4">
+
+    {/* Total Usuarios */}
+    <div className="flex justify-between items-center p-4 rounded-xl 
+                    bg-white shadow-sm border border-gray-200 
+                    hover:border-[#0C3C60]/40 hover:shadow-md transition-all">
+      <span className="text-gray-700 flex items-center gap-2">
+        <UsersIcon className="h-5 w-5 text-[#0C3C60]" />
+        Total de Usuarios:
+      </span>
+      <span className="font-bold text-[#0C3C60]">{stats.totalInterns + 3}</span>
+    </div>
+
+    {/* Trabajadores Activos */}
+    <div className="flex justify-between items-center p-4 rounded-xl 
+                    bg-white shadow-sm border border-gray-200 
+                    hover:border-[#2CA792]/40 hover:shadow-md transition-all">
+      <span className="text-gray-700 flex items-center gap-2">
+        <CheckCircleIcon className="h-5 w-5 text-[#2CA792]" />
+        Trabajadores Activos:
+      </span>
+      <span className="font-bold text-[#2CA792]">{stats.activeInterns}</span>
+    </div>
+
+    {/* Personal Supervisora */}
+    <div className="flex justify-between items-center p-4 rounded-xl 
+                    bg-white shadow-sm border border-gray-200 
+                    hover:border-[#0C3C60]/30 hover:shadow-md transition-all">
+      <span className="text-gray-700 flex items-center gap-2">
+        <UsersIcon className="h-5 w-5 text-[#0C3C60]" />
+        Personal de Supervisión:
+      </span>
+      <span className="font-bold text-[#0C3C60]">3</span>
+    </div>
+
+    {/* Tasa de Finalización */}
+    <div className="flex justify-between items-center p-4 rounded-xl 
+                    bg-white shadow-sm border border-gray-200 
+                    hover:border-purple-400/40 hover:shadow-md transition-all">
+      <span className="text-gray-700 flex items-center gap-2">
+        <ClipboardDocumentCheckIcon className="h-5 w-5 text-purple-600" />
+        Tasa de Finalización:
+      </span>
+      <span className="font-bold text-purple-600">
+        {stats.totalTasks > 0 
+          ? Math.round((stats.completedTasks / stats.totalTasks) * 100)
+          : 0}%
+      </span>
+    </div>
+  </div>
+</Card>
+
 
         {/* Acciones Rápidas */}
         <Card 
           title="Acciones Rápidas"
-          className="transform transition-all duration-300 hover:shadow-xl"
+          className="transform transition-all duration-300 hover:shadow-lg"
         >
           <div className="space-y-3">
+
+            {/* Opción */}
             <Link to="/users?action=new">
-              <Button variant="outline" className="w-full justify-start py-3 group hover:bg-[#3484A5] hover:text-white transition-all duration-300">
-                <div className="w-8 h-8 bg-[#3484A5] text-white rounded-lg flex items-center justify-center mr-3 group-hover:bg-white group-hover:text-[#3484A5] transition-colors">
+              <div className="flex items-center gap-4 p-4 border border-[#3484A5]/40 rounded-xl 
+                              hover:bg-[#3484A5]/5 transition-all cursor-pointer">
+                <div className="w-9 h-9 rounded-lg bg-[#3484A5] flex items-center justify-center text-white">
                   +
                 </div>
-                Registrar Nuevo Practicante
-              </Button>
+                <span className="font-medium text-gray-700">
+                  Registrar Nuevo Practicante
+                </span>
+              </div>
             </Link>
+
+            {/* Opción */}
             <Link to="/tasks?action=new">
-              <Button variant="outline" className="w-full justify-start py-3 group hover:bg-[#2CA792] hover:text-white transition-all duration-300">
-                <div className="w-8 h-8 bg-[#2CA792] text-white rounded-lg flex items-center justify-center mr-3 group-hover:bg-white group-hover:text-[#2CA792] transition-colors">
+              <div className="flex items-center gap-4 p-4 border border-[#2CA792]/40 rounded-xl 
+                              hover:bg-[#2CA792]/5 transition-all cursor-pointer">
+                <div className="w-9 h-9 rounded-lg bg-[#2CA792] flex items-center justify-center text-white">
                   +
                 </div>
-                Crear Nueva Tarea
-              </Button>
+                <span className="font-medium text-gray-700">
+                  Crear Nueva Tarea
+                </span>
+              </div>
             </Link>
+
+            {/* Opción */}
             <Link to="/reports">
-              <Button variant="outline" className="w-full justify-start py-3 group hover:bg-[#F0C84F] hover:text-white transition-all duration-300">
-                <div className="w-8 h-8 bg-[#F0C84F] text-white rounded-lg flex items-center justify-center mr-3 group-hover:bg-white group-hover:text-[#F0C84F] transition-colors">
-                  <ChartBarIcon className="h-4 w-4" />
+              <div className="flex items-center gap-4 p-4 border border-[#F0C84F]/40 rounded-xl 
+                              hover:bg-[#F0C84F]/10 transition-all cursor-pointer">
+                <div className="w-9 h-9 rounded-lg bg-[#F0C84F] flex items-center justify-center text-white">
+                  <ChartBarIcon className="h-5 w-5" />
                 </div>
-                Ver Reportes y Estadísticas
-              </Button>
+                <span className="font-medium text-gray-700">
+                  Ver Reportes y Estadísticas
+                </span>
+              </div>
             </Link>
+
           </div>
         </Card>
+
       </div>
 
       {/* Footer del Dashboard */}

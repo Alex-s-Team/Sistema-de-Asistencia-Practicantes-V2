@@ -8,7 +8,6 @@ import {
   CheckCircleIcon,
   ClipboardDocumentListIcon,
   UserGroupIcon,
-  ChatBubbleLeftRightIcon,
   DocumentTextIcon,
   UserCircleIcon,
   ChartBarIcon,
@@ -27,7 +26,6 @@ const Sidebar = ({ isOpen, onClose }) => {
       { name: 'Gestión de Tareas', href: '/tasks', icon: ClipboardDocumentListIcon },
       { name: 'Reportes', href: '/reports', icon: ChartBarIcon },
       { name: 'Justificaciones', href: '/justifications', icon: DocumentTextIcon },
-      { name: 'Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
       { name: 'Mi Perfil', href: '/profile', icon: UserCircleIcon },
     ],
     staff: [
@@ -35,7 +33,6 @@ const Sidebar = ({ isOpen, onClose }) => {
       { name: 'Gestión de Usuarios', href: '/users', icon: UserGroupIcon },
       { name: 'Gestión de Tareas', href: '/tasks', icon: ClipboardDocumentListIcon },
       { name: 'Justificaciones', href: '/justifications', icon: DocumentTextIcon },
-      { name: 'Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
       { name: 'Mi Perfil', href: '/profile', icon: UserCircleIcon },
     ],
     intern: [
@@ -44,7 +41,6 @@ const Sidebar = ({ isOpen, onClose }) => {
       { name: 'Mis Asistencias', href: '/validated-attendances', icon: ClipboardDocumentCheckIcon }, // ✅ ACTUALIZADO
       { name: 'Mis Tareas', href: '/my-tasks', icon: ClipboardDocumentListIcon },
       { name: 'Justificaciones', href: '/justifications', icon: DocumentTextIcon },
-      { name: 'Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
       { name: 'Mi Perfil', href: '/profile', icon: UserCircleIcon },
     ],
   };
