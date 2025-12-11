@@ -10,7 +10,7 @@ export const Input = forwardRef(({
   return (
     <div className="mb-4">
       {label && (
-        <label className="block text-sm font-medium text-gray-200 mb-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           {label}
           {props.required && <span className="text-accent-500 ml-1">*</span>}
         </label>
